@@ -1,0 +1,427 @@
+% ================================================================
+%  §2  Linear Algebra and Quadratic Forms
+% ================================================================
+\section{Linear Algebra and Quadratic Forms}\label{sec:spectral}
+
+The nicest objectives are linear and quadratic --- and even these require nontrivial algebra once the dimension grows.
+This section climbs a ladder of complexity: linear functions (trivial), univariate quadratics (trivial via a trick), separable multivariate quadratics (still easy), and finally general quadratics (where variables interact and the real work begins).
+At the top of the ladder sits spectral theory, which reveals that eigenvalues control everything about a quadratic: curvature, level-set geometry, solvability, and computational cost.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Scalar Products, Norms, and Distances}\label{ssec:inner-product}
+
+Before analyzing any function on $\R^n$, we need the geometric primitives: how to measure angles, lengths, and proximity.
+
+\begin{defn}[Scalar product]\label{def:scalar-product}
+	The \textit{(Euclidean) scalar product} of $x, z \in \R^n$ is
+	$\inner{x, z} = \sum_{i=1}^{n} x_i z_i$.
+	It satisfies four defining properties:
+	symmetry ($\inner{x, z} = \inner{z, x}$),
+	positive definiteness ($\inner{x, x} \geq 0$ with equality iff $x = 0$),
+	homogeneity ($\inner{\alpha x, z} = \alpha \inner{x, z}$),
+	and linearity ($\inner{x + w, z} = \inner{x, z} + \inner{w, z}$).
+	Other scalar products exist and make sense in other spaces (matrices, integrable functions, random variables); cf.\ the kernel trick in SVMs (\Cref{sec:constrained-theory}).
+\end{defn}
+
+The scalar product encodes direction: $\inner{x, z} = \norm{x} \cdot \norm{z} \cdot \cos(\theta)$, where $\theta$ is the angle between $x$ and $z$.
+Positive means ``same direction,'' zero means orthogonal ($x \perp z$), negative means ``opposite direction.''
+The \textit{Cauchy--Schwarz inequality} $\abs{\inner{x, z}} \leq \norm{x} \norm{z}$ is an immediate consequence.
+
+\begin{defn}[Norm and distance]\label{def:norm-distance}
+	The \textit{(Euclidean) norm} of $x \in \R^n$ is $\norm{x} = \sqrt{\inner{x, x}} = \sqrt{x_1^2 + \cdots + x_n^2}$.
+	It satisfies: $\norm{x} \geq 0$ with equality iff $x = 0$; $\norm{\alpha x} = \abs{\alpha} \norm{x}$; and the \textit{triangle inequality} $\norm{x + z} \leq \norm{x} + \norm{z}$.
+	Two related identities: $\norm{x + z}^2 = \norm{x}^2 + \norm{z}^2 + 2\inner{x, z}$ and the \textit{parallelogram law} $2\norm{x}^2 + 2\norm{z}^2 = \norm{x + z}^2 + \norm{x - z}^2$.
+	The \textit{distance} between $x$ and $z$ is $d(x, z) = \norm{x - z}$.
+\end{defn}
+
+\begin{defn}[Ball]\label{def:ball}
+	The closed ball centered at $x \in \R^n$ with radius $r > 0$ is
+	$\mathcal{B}(x, r) = \{z \in \R^n : \norm{z - x} \leq r\}$.
+	Balls replace intervals as the basic notion of ``neighborhood'' in $\R^n$.
+	The norm determines the topology of the space --- what is ``close'' to what --- and this will be crucial when we discuss convergence and continuity.
+\end{defn}
+
+
+The Euclidean norm is just one member of a large family.
+The \textit{$p$-norm} is $\norm{x}_p = (\sum_{i=1}^{n} |x_i|^p)^{1/p}$ for $p \geq 1$.
+Important special cases: $\norm{x}_2$ (Euclidean), $\norm{x}_1 = \sum_i |x_i|$ (used in Lasso regularization, \Cref{ssec:regularization}), $\norm{x}_\infty = \max_i |x_i|$ (Chebyshev), and $\norm{x}_0 = \#\{i : |x_i| > 0\}$ (counting ``norm'' --- not actually a norm, since it violates homogeneity).
+Different $p$ give different ball shapes: $\mathcal{B}_1$ is a diamond, $\mathcal{B}_2$ a sphere, $\mathcal{B}_\infty$ a hypercube.
+In finite dimension all norms are \textit{equivalent}: for any two norms $\norm{\cdot}$ and $\norm{\cdot}'$, there exist $0 < \alpha \leq \beta$ such that $\alpha\norm{x} \leq \norm{x}' \leq \beta\norm{x}$ for all $x$.
+This means convergence in one norm implies convergence in every other --- the topology of $\R^n$ doesn't depend on the choice of norm.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Matrices}\label{ssec:matrices}
+
+A matrix $A \in \R^{m \times n}$ has $m$ rows $A_i \in \R^n$ and $n$ columns $A^j \in \R^m$.
+The \textit{transpose} $A^T \in \R^{n \times m}$ exchanges rows with columns: $(A^T)_{ij} = A_{ji}$.
+A square matrix $A \in \R^{n \times n}$ is \textit{symmetric} if $A = A^T$, equivalently $A_{ij} = A_{ji}$ for all $i, j$.
+A scalar $a \in \R$ can be viewed as a $1 \times 1$ symmetric matrix.
+
+$\R^n$ is a finite-dimensional vector space of dimension $n$.
+The \textit{canonical basis} $\{u^1, \dots, u^n\}$ consists of the $n$ unit vectors: $u^i_j = 1$ if $j = i$ and $0$ otherwise.
+Every $x \in \R^n$ is a linear combination $x = \sum_i x_i u^i$.
+
+The matrix--vector product $Ax \in \R^m$ (for $x \in \R^n$) has $i$-th component $\inner{A_i, x}$; the product $x^T A$ (for $x \in \R^m$) gives a row vector with $j$-th component $\inner{A^j, x}$.
+The scalar product can be written $\inner{x, z} = x^T z = z^T x$.
+The matrix--matrix product $AB$ (for $A \in \R^{m \times k}$, $B \in \R^{k \times n}$) has entry $(AB)_{ij} = \inner{A_i, B^j}$ and costs $\mathcal{O}(nmk)$ --- expensive unless $A$ or $B$ is sparse.
+
+The \textit{spectral norm} (or \textit{operator norm}) of $A$ is
+$\norm{A} = \max_{\norm{x}=1} \norm{Ax} = \sigma_{\max}(A) = \sqrt{\lambda_{\max}(A^T A)}$,
+where $\sigma_{\max}$ is the largest singular value.
+For symmetric $A$, $\norm{A} = \max_i |\lambda_i|$.
+The spectral norm is submultiplicative ($\norm{AB} \leq \norm{A}\norm{B}$) and controls how much a matrix can stretch a vector.
+The \textit{spectral radius} $\rho(A) = \max_i |\lambda_i(A)|$ satisfies $\rho(A) \leq \norm{A}$, with equality when $A$ is symmetric.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Linear Functions}\label{ssec:linear-functions}
+
+The simplest possible objective is linear.
+We start univariate, then generalize.
+
+\paragraph{Univariate case}
+
+A \textit{linear univariate function} is $f(x) = bx$ for a fixed $b \in \R$.
+The parameter $b$ is the \textit{slope}: if $b > 0$, $f$ is increasing; if $b < 0$, decreasing; if $b = 0$, constant.
+Unconstrained optimization is trivial: $\min f = -\infty$ and $\max f = +\infty$ unless $b = 0$, in which case both equal $0$.
+
+Box-constrained optimization $\min\{bx : x \in [x_-, x_+]\}$ is equally immediate.
+When $b > 0$, the minimum sits at $x_-$ and the maximum at $x_+$; when $b < 0$ the roles reverse; when $b = 0$ every point is optimal.
+This ``works'' even if $x_- = -\infty$ or $x_+ = +\infty$, since $b \cdot (\pm \infty) = \pm \infty$ by convention.
+A closed-form $\mathcal{O}(1)$ solution --- don't get used to it.
+
+\paragraph{Multivariate case}
+
+A \textit{linear multivariate function} is $f(x) = \inner{b, x} = \sum_{i=1}^{n} b_i x_i$ for a fixed $b \in \R^n$.
+Linearity means $f(\gamma x) = \gamma f(x)$ and $f(x + z) = f(x) + f(z)$.
+The graph of $f$ is a hyperplane in $\R^{n+1}$; level sets are parallel hyperplanes in $\R^n$, all perpendicular to $b$.
+
+For box-constrained optimization on a hyperrectangle $X = \{x : x_- \leq x \leq x_+\}$, the problem separates into $n$ independent univariate problems (one per coordinate), each solvable in $\mathcal{O}(1)$.
+Total cost: $\mathcal{O}(n)$.
+This is the last time optimization will be this easy.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Quadratic Univariate Functions}\label{ssec:quad-univariate}
+
+The next step up: $f(x) = ax^2 + bx$ for fixed $a, b \in \R$.
+A homogeneous quadratic ($b = 0$) plus a linear ($a = 0$) term.
+
+\paragraph{Homogeneous case ($b = 0$)}
+
+$f(x) = ax^2$ is symmetric around the origin.
+If $a > 0$, the parabola opens upward: $f$ decreases for $x < 0$, increases for $x > 0$, and the minimum is at $x = 0$.
+If $a < 0$, it opens downward: the maximum is at $x = 0$, and $f$ is unbounded below.
+If $a = 0$, $f$ is constant.
+
+Box-constrained optimization on $[x_-, x_+]$ requires a case analysis.
+When $a > 0$: if $0 \in [x_-, x_+]$ then $\argmin = 0$ and $\argmax = \argmax\{f(x_-), f(x_+)\}$; if $x_- > 0$ then $\argmin = x_-$; if $x_+ < 0$ then $\argmin = x_+$.
+Still $\mathcal{O}(1)$.
+
+\paragraph{Non-homogeneous case ($a \neq 0$, $b \neq 0$)}
+
+The linear term $bx$ breaks the symmetry around the origin.
+A powerful trick restores it: define $\bar{x} = -b / (2a)$ and substitute $z = x - \bar{x}$.
+Expanding $f(x) = a(z + \bar{x})^2 + b(z + \bar{x})$ and using $2a\bar{x} + b = 0$, the cross-terms cancel:
+\begin{equation}\label{eq:completing-square-univariate}
+	f(x) = az^2 + f(\bar{x}).
+\end{equation}
+The problem reduces to a homogeneous quadratic in $z$ plus a constant offset.
+The point $\bar{x}$ is the \textit{center} of the function --- the vertex of the parabola.
+If $a > 0$, the unique minimum is at $\bar{x}$; if $a < 0$, the unique maximum.
+Still $\mathcal{O}(1)$.
+
+\begin{rem}\label{rem:completing-square}
+	This ``completing the square'' trick will reappear in the multivariate setting (\Cref{ssec:quad-nonhom}).
+	The idea is always the same: shift the origin to the center, where the function becomes homogeneous and therefore easier to analyze.
+\end{rem}
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Separable Quadratic Functions}\label{ssec:separable-quad}
+
+A \textit{separable (non-homogeneous) quadratic} is
+\begin{equation}\label{eq:separable-quad}
+	f(x) = \sum_{i=1}^{n} \bigl(a_i x_i^2 + b_i x_i\bigr),
+	\qquad (a, b) \in \R^{2n}.
+\end{equation}
+This is a sum of $n$ univariate quadratics --- one per coordinate --- with no cross-terms.
+Each can be minimized independently by completing the square: the center is $\bar{x}_i = -b_i / (2a_i)$ when $a_i \neq 0$.
+Total cost: $\mathcal{O}(n)$.
+
+An important special case is $f(x) = \norm{x}^2 = \sum_i x_i^2$ (all $a_i = 1$, $b_i = 0$), whose level sets are circles (when $n = 2$) or spheres.
+When $a_1 \neq a_2$, the level sets become axis-aligned ellipses: the larger $a_i / a_j$, the more elongated.
+Non-zero $b_i$ simply shifts the center from the origin to $\bar{x}$.
+
+This is the last time we get closed formulas.
+The separable structure means variables don't interact --- each $x_i$ can be chosen without knowing the others.
+In a general quadratic, this independence breaks.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Tomographies}\label{ssec:tomographies}
+
+Before tackling the general multivariate case, we need a tool to visualize and analyze functions of $n$ variables.
+The graph $\Gr(f) \subset \R^{n+1}$ is unpicturable for $n > 2$.
+Level sets help but live in $\R^n$, still hard for $n > 3$.
+The solution: ``slice'' the function along a chosen direction and study the resulting one-dimensional function.
+
+\begin{defn}[Tomography]\label{def:tomography}
+	Given $f \colon \R^n \to \R$, an origin $x \in \R^n$, and a direction $d \in \R^n$, the \textit{tomography} of $f$ along $d$ from $x$ is
+	\begin{equation}\label{eq:tomography}
+		\varphi_{x,d}(\alpha) = f(x + \alpha d) \colon \R \to \R.
+	\end{equation}
+	When $x$ and $d$ are clear from context, we write simply $\varphi(\alpha)$.
+\end{defn}
+
+The norm of $d$ only changes the horizontal scale: $\varphi_{x, \beta d}(\alpha) = \varphi_{x, d}(\beta \alpha)$, so it is often convenient to use a normalized direction $\norm{d} = 1$.
+Restricting to a coordinate direction $u^i$ (the $i$-th canonical basis vector) gives the partial restriction $f_x^i(\alpha) = f(x_1, \dots, x_{i-1}, \alpha, x_{i+1}, \dots, x_n)$.
+
+\paragraph{Tomography of a linear function}
+
+For $f(x) = \inner{b, x}$ with origin $x = 0$ and $\norm{d} = 1$:
+\begin{equation}\label{eq:tomography-linear}
+	\varphi(\alpha) = \alpha \inner{b, d} = \alpha \norm{b} \cos(\theta),
+\end{equation}
+where $\theta$ is the angle between $b$ and $d$.
+The tomography is a linear function of $\alpha$.
+It is steepest when $d$ is collinear with $b$ (either same direction or opposite); flat when $d \perp b$.
+The direction $-b / \norm{b}$ gives the steepest decrease --- a foreshadowing of the gradient method.
+
+Line search methods exploit tomographies directly: pick a descent direction $d$, then minimize $\varphi_{x,d}$ over $\alpha \geq 0$.
+We will see this idea at work in every gradient-based algorithm.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{The General Quadratic Function}\label{ssec:general-quad}
+
+Now the variables interact.
+The general (homogeneous) quadratic on $\R^n$ is
+\begin{equation}\label{eq:homogeneous-quad}
+	f(x) = \frac{1}{2}\, x^T Q x
+	= \frac{1}{2} \biggl[\sum_{i=1}^{n} Q_{ii} x_i^2
+		+ \sum_{\substack{i,j=1 \\ j \neq i}}^{n} Q_{ij} x_i x_j\biggr],
+\end{equation}
+for a fixed $Q \in \R^{n \times n}$.
+The off-diagonal terms $Q_{ij} x_i x_j$ couple the variables: changing $x_i$ affects the optimal choice for $x_j$.
+This coupling is what makes general quadratics fundamentally harder than separable ones.
+
+An important observation: even if $Q$ is not symmetric, we can always replace it with $(Q + Q^T)/2$ without changing $f$.
+Indeed, $x^T Q x = x^T [(Q + Q^T)/2]\, x$.
+So there is no loss of generality in assuming $Q$ symmetric from the start.
+
+The tomography along a direction $d$ from the origin gives
+\begin{equation}\label{eq:tomography-quad}
+	\varphi(\alpha) = f(\alpha d) = \frac{1}{2}\, \alpha^2 (d^T Q d).
+\end{equation}
+This is a univariate parabola whose sign and steepness depend entirely on $d^T Q d$.
+Different directions yield different curvatures.
+Understanding this dependence requires knowing the spectrum of $Q$.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Eigenvalues and Spectral Decomposition}\label{ssec:spectral}
+
+\begin{defn}[Eigenvalues and eigenvectors]\label{def:eigen}
+	Given a matrix $Q \in \R^{n \times n}$, a scalar $\lambda \in \R$ is an \textit{eigenvalue} and a nonzero vector $v \in \R^n$ is the corresponding \textit{eigenvector} if $Qv = \lambda v$.
+	An eigenvector is a direction along which $Q$ acts as a simple rescaling.
+\end{defn}
+
+Eigenvalues can be complex in general, and eigenvectors need not be orthogonal.
+Symmetric matrices are the exception --- and the one that matters for optimization.
+
+\begin{thm}[Spectral theorem for symmetric matrices]\label{thm:sym-eigen}
+	If $Q \in \R^{n \times n}$ is symmetric, then $Q$ has $n$ real eigenvalues (counted with multiplicity) and $n$ eigenvectors that can be chosen orthonormal.
+\end{thm}
+
+We denote these orthonormal eigenvectors $H_1, \dots, H_n \in \R^n$ with corresponding eigenvalues $\lambda_1 \geq \lambda_2 \geq \cdots \geq \lambda_n$ (ordered from largest to smallest), so that $Q H_i = \lambda_i H_i$ for all $i$.
+
+\begin{defn}[Eigenvector matrix and spectral decomposition]\label{def:spectral-decomp}
+	Collecting the eigenvectors into $H = [H_1 \mid \cdots \mid H_n] \in \R^{n \times n}$, orthonormality gives $H^T H = I$ (so $H$ is orthogonal).
+	The \textit{spectral decomposition} is
+	\begin{equation}\label{eq:spectral-decomp}
+		Q = H \Lambda H^T = \sum_{i=1}^{n} \lambda_i H_i H_i^T,
+		\qquad \Lambda = \diag(\lambda_1, \dots, \lambda_n).
+	\end{equation}
+	Each term $\lambda_i H_i H_i^T$ is a rank-one matrix.
+	The decomposition expresses $Q$ as a weighted sum of these terms, one per eigenvalue.
+\end{defn}
+
+Why does this matter?
+The spectral decomposition turns matrix operations into scalar ones.
+If we change coordinates via $y = H^T x$, the quadratic $x^T Q x$ becomes $\sum_i \lambda_i y_i^2$ --- a sum of independent squared terms, each scaled by an eigenvalue.
+Large eigenvalues stretch, small ones compress.
+The ratio between the largest and smallest controls how ``distorted'' the quadratic is, and (as we will see) how fast gradient methods converge.
+
+\begin{thm}[Variational characterization of eigenvalues]\label{thm:var-eigen}
+	For a symmetric $Q$, the extreme eigenvalues satisfy
+	\begin{equation}\label{eq:rayleigh-quotient}
+		\lambda_1 = \max\left\{\frac{d^T Q d}{d^T d} : d \neq 0\right\},
+		\qquad
+		\lambda_n = \min\left\{\frac{d^T Q d}{d^T d} : d \neq 0\right\}.
+	\end{equation}
+	The ratio $d^T Q d / d^T d$ is the \textit{Rayleigh quotient}.
+	The maximum is attained at $d = H_1$, the minimum at $d = H_n$.
+\end{thm}
+
+\paragraph{Determinant and inverse}
+
+\begin{defn}[Determinant]\label{def:determinant}
+	The determinant of $Q$ equals the product of its eigenvalues:
+	$\det(Q) = \prod_{i=1}^{n} \lambda_i$.
+	If $\det(Q) \neq 0$, then $Q$ is nonsingular, every eigenvalue is nonzero, and $Q^{-1}$ exists.
+	The eigenvectors of $Q^{-1}$ are the same as those of $Q$, with reciprocal eigenvalues: $Qv = \lambda v$ implies $Q^{-1}v = (1/\lambda)\, v$.
+	It follows that $\det(Q^{-1}) = \det(Q)^{-1}$.
+\end{defn}
+
+Computing eigenvalues by finding roots of the characteristic polynomial $\det(Q - \lambda I) = 0$ is practical only for $n = 2$ (quadratic formula) or $n = 3$ (cubic formula).
+For $n = 2$: $\det(Q) = Q_{11}Q_{22} - Q_{12}^2$ (using symmetry).
+For larger $n$, iterative algorithms (QR, divide-and-conquer) are used instead \cite{nocedal2006}.
+Diagonal and triangular matrices are the exception: their eigenvalues are the diagonal entries.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Matrix Definiteness}\label{ssec:definiteness}
+
+The sign pattern of the eigenvalues determines the shape of the associated quadratic --- and therefore the nature of its critical points.
+
+\begin{defn}[Matrix definiteness]\label{def:definiteness}
+	A symmetric matrix $Q$ is:
+	\begin{itemize}
+		\item \textit{Positive definite} ($Q \succ 0$): all $\lambda_i > 0$.
+			The quadratic $\frac{1}{2} x^T Q x$ has a unique global minimum at the origin.
+		\item \textit{Negative definite} ($Q \prec 0$): all $\lambda_i < 0$.
+			Unique global maximum at the origin.
+		\item \textit{Positive semidefinite} ($Q \succeq 0$): all $\lambda_i \geq 0$.
+			The quadratic is convex, but the minimum need not be unique --- flat directions correspond to zero eigenvalues.
+		\item \textit{Negative semidefinite} ($Q \preceq 0$): all $\lambda_i \leq 0$.
+			Concave, with a possibly non-unique maximum.
+		\item \textit{Indefinite}: eigenvalues of both signs.
+			The origin is a saddle point.
+	\end{itemize}
+\end{defn}
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Tomographies of Quadratic Functions}\label{ssec:quad-tomographies}
+
+The spectral decomposition makes tomographies along eigenvectors completely transparent.
+
+\begin{equation}\label{eq:tomography-eigenvector}
+	\varphi_{0, H_i}(\alpha) = f(\alpha H_i) = \frac{1}{2}\, \alpha^2 \lambda_i.
+\end{equation}
+Along eigenvector $H_i$, the quadratic reduces to a univariate parabola scaled by $\lambda_i$.
+The steepest upward curvature is along $H_1$ ($\lambda_1$, the largest eigenvalue); the steepest downward curvature (or least upward) is along $H_n$ ($\lambda_n$, the smallest).
+Intermediate directions give intermediate curvatures, always in $[\lambda_n,\lambda_1]$.
+
+\begin{exm}[Tomographies under different definiteness]\label{exm:quad-tomographies}
+	Consider $n = 2$ with $H = \frac{\sqrt{2}}{2}\bigl[\begin{smallmatrix} -1 & 1 \\ 1 & 1 \end{smallmatrix}\bigr]$ (fixed eigenvectors, rotated $45^\circ$).
+	\begin{itemize}
+		\item $Q \succ 0$ with $\lambda = (8, 4)$: $d^T Q d > 0$ for all $d \neq 0$.
+			Every tomography is an upward parabola.
+			Steepest along $H_1$ ($\lambda_1 = 8$); least steep along $H_2$ ($\lambda_2 = 4$).
+		\item $Q \succeq 0$ with $\lambda = (8, 0)$: $d^T Q d \geq 0$, but the tomography along $H_2$ is completely flat.
+			The quadratic has a ``valley'' in the $H_2$-direction.
+		\item $Q$ indefinite with $\lambda = (8, -2)$: $d^T Q d$ can be positive or negative depending on $d$.
+			Along $H_1$ the parabola opens upward; along $H_2$ it opens downward.
+			The origin is a saddle point.
+		\item $Q \prec 0$ with $\lambda = (-4, -8)$: $d^T Q d < 0$ for all $d \neq 0$.
+			Every tomography is a downward parabola.
+			Steepest negative curvature along $H_2$ ($\lambda_2 = -8$).
+	\end{itemize}
+\end{exm}
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Level Sets and Geometry}\label{ssec:level-sets}
+
+The spectral decomposition also governs the shape of level sets.
+For a homogeneous quadratic $f(x) = \frac{1}{2} x^T Q x$, all level sets are centered at the origin (since $f$ is symmetric: $f(x) = f(-x)$).
+
+The level set $L(f, v)$ intersects each eigendirection $H_i$ at distance $\sqrt{2v / \lambda_i}$ from the origin (provided $\lambda_i > 0$ and $v > 0$).
+So the eigenvectors are the axes of the level-set ellipsoid, and the axis lengths are $\sqrt{2v / \lambda_i}$.
+Smaller $\lambda_i$ means a longer axis: the function is flatter in that direction, so it takes more distance to reach a given function value.
+
+Four geometric regimes correspond to the four definiteness classes:
+\begin{itemize}
+	\item All $\lambda_i > 0$ (positive definite): level sets are ellipsoids.
+		When $\lambda_1 = \lambda_n$ (identity), they are spheres.
+	\item Some $\lambda_i = 0$ (positive semidefinite): level sets are ``degenerate'' ellipsoids --- cylinders extending to infinity along the null-space directions.
+	\item Eigenvalues of both signs (indefinite): level sets are hyperboloids.
+		The positive-eigenvalue directions give the ``bowl'' part; the negative-eigenvalue directions give the ``saddle'' part.
+	\item All $\lambda_i < 0$ (negative definite): level sets are ellipsoids again (the function is a downward paraboloid).
+\end{itemize}
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Optimizing Quadratic Functions}\label{ssec:opt-quad}
+
+Definiteness of $Q$ and the presence of a linear term jointly determine whether --- and how --- a quadratic can be optimized.
+
+\subsubsection{Homogeneous Multivariate Quadratics}\label{sssec:opt-quad-hom}
+
+For $f(x) = \frac{1}{2} x^T Q x$ (no linear term), optimality depends entirely on the eigenvalue signs:
+\begin{itemize}
+	\item $Q \succeq 0$ and $Q \preceq 0$ simultaneously (i.e., $Q = 0$): $f \equiv 0$, $\min = \max = 0$.
+	\item $Q \succeq 0$: $\min = 0$ at $x = 0$, but $\max = +\infty$.
+	\item $Q \preceq 0$: $\max = 0$ at $x = 0$, but $\min = -\infty$.
+	\item $Q$ indefinite: both $\min = -\infty$ and $\max = +\infty$.
+\end{itemize}
+
+What about box-constrained optimization $\min\{f(x) : x \in [x_-, x_+]\}$?
+Unlike the univariate case, this is \emph{not} easy in general.
+Optimizing a quadratic over a box is $\mathcal{NP}$-hard for indefinite $Q$ \cite{deklerk2008}.
+Even when $Q \succeq 0$, the problem is polynomial but nontrivial --- the algorithms we develop in \Cref{sec:quadratic-methods} are needed.
+Minimization and maximization behave very differently here.
+
+\subsubsection{Non-homogeneous, Nonsingular Case}\label{ssec:quad-nonhom}
+
+The full quadratic is
+\begin{equation}\label{eq:full-quad}
+	f(x) = \frac{1}{2}\, x^T Q x + \inner{q, x} + c,
+	\qquad Q \in \R^{n \times n},\; q \in \R^n,\; c \in \R.
+\end{equation}
+
+When $Q$ is nonsingular ($\det(Q) \neq 0$, equivalently $\lambda_i \neq 0$ for all $i$), we can repeat the univariate trick.
+Setting $\nabla f(x) = Qx + q = 0$ yields the critical point $\bar{x} = -Q^{-1} q$.
+Think of $\bar{x}$ as the center of the function.
+Substituting $z = x - \bar{x}$ and using $Q\bar{x} = -q$, all linear terms cancel:
+\begin{equation}\label{eq:completing-square-multivariate}
+	f(x) = \frac{1}{2}\, z^T Q z + f(\bar{x}).
+\end{equation}
+The problem reduces to a homogeneous quadratic in $z$ plus a constant offset.
+If $Q \succ 0$, the unique minimum sits at $z = 0$, i.e., $x = \bar{x}$.
+If $Q$ is indefinite, $\bar{x}$ is a saddle point.
+This is the exact multivariate analogue of the completing-the-square trick.
+
+\subsubsection{Non-homogeneous, Singular Case}\label{sssec:opt-quad-singular}
+
+When $Q$ is singular, $Q^{-1}$ doesn't exist and the trick above fails.
+The analysis uses the kernel--image decomposition of $Q$.
+
+Let $I^0 = \{i : \lambda_i = 0\}$ and $I^+ = \{i : \lambda_i \neq 0\}$, with $k = |I^0| > 0$.
+The kernel $\ker(Q) = \{v : Qv = 0\}$ is the span of $\{H_i\}_{i \in I^0}$, and the image $\im(Q)$ is the span of $\{H_i\}_{i \in I^+}$.
+Since the eigenvectors form an orthonormal basis, $\R^n = \im(Q) \oplus \ker(Q)$ with $\im(Q) \perp \ker(Q)$.
+
+Decompose $q = q^+ + q^0$ with $q^+ \in \im(Q)$ and $q^0 \in \ker(Q)$.
+The component $q^+$ lives in the range of $Q$, so we can absorb it via a partial change of variables (finding $\bar{x}$ with $Q\bar{x} = -q^+$).
+With $z = x - \bar{x}$:
+\begin{equation}\label{eq:singular-quad-reduced}
+	f(x) = \frac{1}{2}\, z^T Q z + \inner{q^0, z} + f(\bar{x}).
+\end{equation}
+The quadratic term $\frac{1}{2} z^T Q z$ kills the kernel directions (because $Qv = 0$ for $v \in \ker(Q)$), but the linear term $\inner{q^0, z}$ may not vanish along those directions.
+What matters is $q^0$:
+
+\begin{itemize}
+	\item If $q^0 = 0$ (equivalently $q \in \im(Q)$, or $Q\bar{x} = -q$ has a solution): a minimum exists (assuming $Q \succeq 0$), but it is not unique.
+		The entire affine subspace $\bar{x} + \ker(Q)$ consists of minimizers --- the function is flat along null-space directions, and all these points share the same objective value $f(\bar{x})$.
+	\item If $q^0 \neq 0$ (equivalently $q \notin \im(Q)$): no minimum exists.
+		Moving along the null-space direction $q^0$, the quadratic term stays constant but the linear term $\inner{q^0, z}$ keeps decreasing.
+		The function is unbounded below.
+\end{itemize}
+
+In either case, the key computational task is the same: solve $Q\bar{x} = -q$ (or prove it has no solution).
+This is a linear system --- $\mathcal{O}(n^3)$ at worst, doable for moderate $n$, but prohibitive for $n \approx 10^9$.
+Iterative methods that avoid forming $Q^{-1}$ become essential, and they are the subject of \Cref{sec:quadratic-methods}.

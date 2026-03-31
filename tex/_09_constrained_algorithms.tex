@@ -1,0 +1,283 @@
+% ================================================================
+%  §9  Constrained Optimization Algorithms
+% ================================================================
+\section{Constrained Optimization Algorithms}\label{sec:constrained-algorithms}
+
+The previous section established \emph{what} characterizes a constrained optimum --- KKT conditions, duality, second-order tests.
+This section addresses \emph{how} to find one.
+The algorithmic landscape for constrained optimization is richer than the unconstrained case, because the feasible region $X$ introduces geometric structure that each method exploits differently.
+
+The organizing principle: the structure of $X$ determines the algorithm.
+Linear inequality constraints lead to active-set and simplex-type methods; simple constraints (boxes, balls, simplices) favor projected gradient and Frank--Wolfe; general convex constraints are handled by barrier and interior point methods; and the dual perspective transforms complex constraints into simple ones at the cost of a nonsmooth objective.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Equality-Constrained Quadratic Programs}\label{ssec:eq-constrained-qp}
+
+These serve as the foundation --- every more complex method eventually reduces to solving a sequence of equality-constrained QPs.
+
+The problem is $\min\{\frac{1}{2} x^T Q x + q^T x : Ax = b\}$ with $A \in \R^{m \times n}$, $\rank(A) = m < n$.
+The KKT conditions yield the symmetric indefinite system
+\begin{equation}\label{eq:kkt-system}
+	\begin{bmatrix} Q & A^T \\ A & 0 \end{bmatrix}
+	\begin{bmatrix} x \\ \mu \end{bmatrix}
+	= \begin{bmatrix} -q \\ b \end{bmatrix}.
+\end{equation}
+Three solution strategies exist, each with its own trade-offs.
+
+\paragraph{Schur complement (reduced KKT)}
+
+When $Q$ is nonsingular, eliminate $x$ to get the smaller system $[AQ^{-1}A^T]\mu = -b - AQ^{-1}q$.
+The Schur complement $M = AQ^{-1}A^T \in \R^{m \times m}$ is positive semidefinite when $Q \succeq 0$ and smaller than the original system, but can be dense even when $A$ and $Q$ are sparse.
+Preconditioned conjugate gradient on $M$ avoids forming it explicitly.
+
+\paragraph{Null space method}
+
+Partition $A = [A_B \mid A_N]$ with $A_B$ invertible.
+The constraint $Ax = b$ gives $x_B = A_B^{-1}(b - A_N x_N)$, so $x = Dx_N + d$ where $D = [-A_B^{-1}A_N;\; I]^T$.
+The \textit{reduced Hessian} $\tilde{Q} = D^T Q D \in \R^{(n-m) \times (n-m)}$ governs the reduced problem $\min_{x_N} \frac{1}{2} x_N^T \tilde{Q}\, x_N + (D^T Q d + D^T q)^T x_N$.
+The method generalizes to any basis of $\ker(A)$ and handles singular $Q$.
+
+\paragraph{Cholesky on the KKT system}
+
+For moderate $n$, direct factorization of the KKT system at $\mathcal{O}(n^3)$ is often the best choice, providing both $x$ and $\mu$ simultaneously.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Active Set Methods}\label{ssec:active-set}
+
+Active set methods solve inequality-constrained QPs by maintaining an estimate of the active constraints and solving a sequence of equality-constrained subproblems.
+
+The key insight: if we knew $\mathcal{A}(x^*) = \{i : A_i x^* = b_i\}$, the problem would reduce to linear algebra.
+Since we don't, we estimate it iteratively, using dual information to guide updates.
+
+\begin{algorithm}
+	\caption{Active Set Method for Quadratic Programs (ASMQP)}
+	\label{alg:ASMQP}
+	\begin{algorithmic}[1]
+		\Require $Q \in \R^{n \times n}$, $q \in \R^n$, $A \in \R^{m \times n}$, $b \in \R^m$, feasible $x^0$
+		\Ensure Optimal solution to $(P)\; \min\{\frac{1}{2} x^T Q x + q^T x : Ax \leq b\}$
+		\Procedure{ASMQP}{$Q, q, A, b, x^0$}
+			\State $x \gets x^0$;\; $B \gets \mathcal{A}(x)$
+			\While{true}
+				\State Solve $(P_B)\; \min\{f(x) : A_B x = b_B\}$; let $(\bar{x}, \bar{\mu}_B)$ be the KKT pair
+				\If{$A_i \bar{x} \leq b_i$ for all $i \notin B$} \Comment{Candidate feasible?}
+					\If{$\bar{\mu}_B \geq 0$} \Return $\bar{x}$ \Comment{KKT satisfied: optimal}
+					\Else
+						\State Remove $h = \argmin_{i \in B}\{\bar{\mu}_i\}$ from $B$ \Comment{Drop most violated dual}
+					\EndIf
+				\Else
+					\State $d \gets \bar{x} - x$;\;
+						$\bar{\alpha} \gets \min\{(b_i - A_i x)/(A_i d) : A_i d > 0,\, i \notin B\}$
+					\State $x \gets x + \bar{\alpha}\, d$;\; $B \gets \mathcal{A}(x)$
+				\EndIf
+			\EndWhile
+		\EndProcedure
+	\end{algorithmic}
+\end{algorithm}
+
+Each iteration either moves to a strictly better feasible point or improves the dual solution.
+Since there are at most $2^m$ possible active sets and the objective decreases, the method terminates in finite time.
+Linear independence of $A_B$ is required for well-posedness.
+
+\paragraph{Box-constrained problems}
+
+For $\min\{\frac{1}{2} x^T Q x + q^T x : \underline{x} \leq x \leq \overline{x}\}$, the active set structure is particularly elegant.
+Each active constraint corresponds to a variable fixed at its bound.
+The reduced problem involves only the ``free'' variables: $\min\{\frac{1}{2} x_F^T Q_{FF} x_F + \tilde{q}_F^T x_F\}$ where $\tilde{q}$ absorbs the contribution of fixed variables.
+Linear independence is automatic, initialization is trivial (any point in the box), and active set updates add or remove single bounds.
+
+Active set methods extend to general nonlinear objectives by replacing the equality subproblem with an unconstrained optimization on the reduced space.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Projected Gradient Methods}\label{ssec:projected-gradient}
+
+Projected gradient methods maintain feasibility at every iteration while making progress toward optimality.
+When $-\nabla f(x)$ is infeasible (it points outside $X$), we project it onto the cone of feasible directions.
+
+\paragraph{Box-constrained projected gradient}
+
+For box constraints, the projection decomposes into independent scalar projections: simply zero out gradient components that would push a variable past its bound.
+The step size is bounded by the distance to the nearest violated bound.
+
+\begin{algorithm}
+	\caption{Box-Constrained Projected Gradient (BCPGM)}
+	\label{alg:BCPGM}
+	\begin{algorithmic}[1]
+		\Require $f$, bounds $\underline{x}, \overline{x}$, initial feasible $x$, tolerance $\varepsilon$
+		\Procedure{BCPGM}{$f, \underline{x}, \overline{x}, x, \varepsilon$}
+			\While{true}
+				\State $d \gets -\nabla f(x)$;\; $\bar{\alpha} \gets \infty$
+				\For{$i = 1, \dots, n$}
+					\If{$d_i < 0$ and $x_i = \underline{x}_i$, or $d_i > 0$ and $x_i = \overline{x}_i$}
+						\State $d_i \gets 0$ \Comment{Project out infeasible component}
+					\ElsIf{$d_i \neq 0$}
+						\State $\bar{\alpha} \gets \min(\bar{\alpha},\; \text{distance to bound along } d_i)$
+					\EndIf
+				\EndFor
+				\If{$\inner{\nabla f(x), d} \geq -\varepsilon$} \Return $x$ \EndIf
+				\State $\alpha \gets \text{line search}(f, x, d, \bar{\alpha})$;\; $x \gets x + \alpha d$
+			\EndWhile
+		\EndProcedure
+	\end{algorithmic}
+\end{algorithm}
+
+\paragraph{Goldstein's method}
+
+An alternative: take the gradient step first, then project onto $X$:
+$y^k = x^k - \alpha^k \nabla f(x^k)$, then $x^{k+1} = p_X(y^k)$.
+This is not a descent method, but works well when projection onto $X$ is cheap.
+For $L$-smooth convex functions with $\alpha = 1/L$: $\mathcal{O}(LD^2/\varepsilon)$ iterations; with $\tau$-strong convexity: $\mathcal{O}((L/\tau)\log(1/\varepsilon))$ linear convergence.
+
+Projection cost determines practical efficiency: $\mathcal{O}(n)$ for boxes ($p_X(y)_i = \max(\underline{x}_i, \min(y_i, \overline{x}_i))$), $\mathcal{O}(n)$ for balls, closed-form for simplices.
+
+\paragraph{Rosen's method}
+
+For general linear constraints $Ax \leq b$, project onto the tangent space of active constraints.
+With $\bar{A} = A_{\mathcal{A}(x)}$ of full row rank:
+$d = (I - \bar{A}^T[\bar{A}\bar{A}^T]^{-1}\bar{A})(-\nabla f(x))$.
+If the projected gradient is zero, check dual feasibility (KKT multipliers $\lambda = -[\bar{A}\bar{A}^T]^{-1}\bar{A}\nabla f(x)$); if some $\lambda_h < 0$, drop constraint $h$ and re-project.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Frank--Wolfe (Conditional Gradient) Method}\label{ssec:frank-wolfe}
+
+The Frank--Wolfe method replaces the projection step with a linear minimization over $X$.
+At each iterate, it linearizes $f$ and solves $\min\{\inner{\nabla f(x), z} : z \in X\}$, then moves toward the minimizer.
+
+\begin{algorithm}
+	\caption{Frank--Wolfe Method (FW)}
+	\label{alg:FW}
+	\begin{algorithmic}[1]
+		\Require $f$, feasible region $X$, initial $x \in X$, tolerance $\varepsilon$
+		\Procedure{FW}{$f, X, x, \varepsilon$}
+			\While{true}
+				\State $\bar{x} \gets \argmin\{\inner{\nabla f(x), z} : z \in X\}$ \Comment{Linear subproblem}
+				\State $d \gets \bar{x} - x$
+				\If{$\inner{\nabla f(x), d} \geq -\varepsilon$} \Return $x$ \EndIf
+				\State $\alpha \gets \text{line search}(f, x, d, 1)$ with $\alpha \leq 1$
+				\State $x \gets x + \alpha d$
+			\EndWhile
+		\EndProcedure
+	\end{algorithmic}
+\end{algorithm}
+
+The optimality condition $\inner{\nabla f(x), d} = 0$ implies $x$ is optimal (for convex $f$, the quantity $f(x) + \inner{\nabla f(x), d}$ provides a computable lower bound, giving an optimality certificate).
+
+Each iteration requires solving one LP over $X$.
+The method shines when $X$ has structure that makes linear optimization cheap: network flows, semidefinite constraints ($X = \{X : \tr(X) \leq 1, X \succeq 0\}$ reduces to a leading eigenvector computation), or norm balls (closed-form solutions).
+
+\paragraph{Enhancements}
+
+A starting feasible point can be found by solving an LP with a dummy objective.
+Quadratic regularization (add $\frac{\gamma}{2}\norm{z - x}^2$) or trust region constraints ($\norm{z - x}_\infty \leq \tau$) improve convergence without complicating the subproblem much.
+Away steps (move away from vertices, not just toward new ones) help avoid stalling at non-optimal extreme points.
+
+\paragraph{Extensions}
+
+For $f \notin C^1$: replace $\nabla f(x)$ with the cutting plane model $f_{\mathcal{B}}$, giving the constrained bundle method $\min\{f_{\mathcal{B}}(z) + \gamma\norm{z - \bar{x}}^2 : z \in X\}$.
+For $f \in C^2$: incorporate second-order information via SQP (Sequential Quadratic Programming): $d^* = \argmin\{\inner{\nabla f(x), d} + \frac{1}{2} d^T \nabla^2 f(x)\, d : x + d \in X\}$, requiring a constrained QP per iteration.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Dual Methods}\label{ssec:dual-methods}
+
+Dual methods work in the space of Lagrange multipliers, transforming complex primal constraints into simple dual constraints.
+
+For $(P)\; \min\{\frac{1}{2} x^T Q x + q^T x : Ax \leq b\}$ with $Q \succ 0$, the dual function is
+\begin{equation}\label{eq:dual-function-qp}
+	\psi(\lambda) = \lambda^T b - \frac{1}{2}(A^T\lambda - q)^T Q^{-1}(A^T\lambda - q),
+\end{equation}
+continuously differentiable with $\nabla\psi(\lambda) = b - Ax(\lambda)$ where $x(\lambda) = Q^{-1}(A^T\lambda - q)$.
+The dual problem $(D)\; \max\{\psi(\lambda) : \lambda \geq 0\}$ is a concave maximization with simple box constraints.
+
+As $\lambda^k \to \lambda^*$, the primal recovery $x(\lambda^k) \to x^*$.
+The dual provides valid lower bounds throughout: $\psi(\lambda^k) \leq \nu(P)$.
+When $X$ has additional structure, a primal-feasible approximation $\hat{x}^k = p_X(x(\lambda^k))$ gives an upper bound, and the gap $f(\hat{x}^k) - \psi(\lambda^k)$ is a computable optimality certificate.
+
+\paragraph{Advantages}
+
+Step size issues (related to $\kappa = L/\tau$) are often less critical in the dual; simple constraints $\lambda \geq 0$ are easier than complex primal constraints; parallelization opportunities arise through decomposition.
+
+\paragraph{Decomposition}
+
+For problems with separable structure $(P)\; \min\{f(x) : Ax \leq b,\, Ex \leq d\}$, relaxing only the ``linking'' constraints $Ax \leq b$ gives a Lagrangian relaxation $\psi(\lambda) = \min\{f(x) + \lambda^T(b - Ax) : Ex \leq d\}$ that decomposes into smaller, independent subproblems --- enabling parallel solution.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Barrier Methods}\label{ssec:barrier}
+
+Barrier methods transform the constrained problem into a sequence of unconstrained ones by penalizing proximity to the constraint boundary.
+
+\begin{defn}[Logarithmic barrier]\label{def:barrier}
+	For $X = \{x : Ax \leq b\}$, the barrier function is
+	\begin{equation}\label{eq:log-barrier}
+		f_\gamma(x) = f(x) - \gamma \sum_{i=1}^{m} \ln(b_i - A_i x),
+	\end{equation}
+	where $\gamma > 0$ is the barrier parameter.
+	$f_\gamma \in C^2$ when $f \in C^2$; $f_\gamma \to +\infty$ at the boundary of $X$ (keeping iterates strictly interior); $f_\gamma$ is strictly convex when $f$ is convex.
+\end{defn}
+
+For each $\gamma > 0$, the unique minimizer $x_\gamma$ traces the \textit{central path} $\mathcal{C} = \{x_\gamma : \gamma \in (0, \infty)\}$.
+As $\gamma \to 0$, $x_\gamma \to x^*$ (the constrained optimum); as $\gamma \to \infty$, $x_\gamma$ approaches the \textit{analytical center} $x_\infty = \argmax\{\prod_i (b_i - A_i x)\}$.
+
+The \textit{path-following} strategy: start near the analytical center and decrease $\gamma$ toward zero, tracking the central path with Newton steps.
+The logarithmic barrier is \textit{self-concordant}, ensuring that Newton's method behaves well.
+If $x^k$ is close to $x_{\gamma^k}$, a few Newton steps yield $x^{k+1}$ close to $x_{\gamma^{k+1}}$ with $\gamma^{k+1} = \tau \gamma^k$ for $\tau < 1$.
+
+Iteration complexity: $\mathcal{O}(\sqrt{m}\log(1/\varepsilon))$, independent of $n$ but depending on the number of constraints $m$.
+Each Newton step costs $\mathcal{O}(n^3)$, so the total is $\mathcal{O}(n^3 \sqrt{m}\log(1/\varepsilon))$.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Primal-Dual Interior Point Methods}\label{ssec:ipm}
+
+Primal-dual methods represent the most practically successful approach to barrier-based optimization, solving primal and dual problems simultaneously.
+
+For the QP $\min\{\frac{1}{2} x^T Q x + q^T x : Ax \leq b\}$, introduce slacks $s \geq 0$ with $Ax + s = b$.
+The KKT conditions are: primal feasibility ($Ax + s = b$, $s \geq 0$), dual feasibility ($Qx + q - A^T\lambda = 0$, $\lambda \geq 0$), and complementary slackness ($\lambda_i s_i = 0$).
+
+The barrier method relaxes complementary slackness to $\lambda_i s_i = \gamma$ for all $i$, giving a smooth system solvable by Newton's method.
+Using $\Lambda = \diag(\lambda)$ and $S = \diag(s)$, the Newton system for $(\Delta x, \Delta\lambda, \Delta s)$ is
+\begin{equation}\label{eq:ipm-newton}
+	\begin{bmatrix} Q & -A^T & 0 \\ A & 0 & I \\ 0 & S & \Lambda \end{bmatrix}
+	\begin{bmatrix} \Delta x \\ \Delta\lambda \\ \Delta s \end{bmatrix}
+	= \begin{bmatrix} r^D \\ r^P \\ \gamma u - \Lambda S u \end{bmatrix},
+\end{equation}
+where $r^P = b - Ax - s$ and $r^D = -(Qx + q - A^T\lambda)$ are residuals.
+
+By eliminating $\Delta s$ and substituting, the system reduces to solving $(Q + A^T\Lambda S^{-1}A)\Delta x = \text{rhs}$.
+The matrix $M = Q + A^T\Lambda S^{-1}A$ is positive definite when $Q \succeq 0$ (since $\Lambda S^{-1} \succ 0$), ensuring a unique solution.
+
+\begin{algorithm}
+	\caption{Primal-Dual Interior Point Method (IPMQP)}
+	\label{alg:ipmqp}
+	\begin{algorithmic}[1]
+		\Require $Q, A, q, b$, tolerances $\varepsilon_P, \varepsilon_D, \varepsilon$, reduction factor $\rho$
+		\Procedure{IPMQP}{$Q, A, q, b, \varepsilon_P, \varepsilon_D, \varepsilon, \rho$}
+			\State Initialize $x$, $\lambda > 0$, $s > 0$
+			\State $\gamma \gets \inner{\lambda, s} / m$
+			\While{$\norm{r^P} > \varepsilon_P$ or $\norm{r^D} > \varepsilon_D$ or $\gamma m > \varepsilon$}
+				\State Solve Newton system for $(\Delta x, \Delta\lambda, \Delta s)$
+				\State $\alpha \gets 0.995 \cdot \max\{\beta : \lambda + \beta\Delta\lambda \geq 0,\; s + \beta\Delta s \geq 0\}$
+				\State $(x, \lambda, s) \gets (x + \alpha\Delta x,\; \lambda + \alpha\Delta\lambda,\; s + \alpha\Delta s)$
+				\State $\gamma \gets \rho \cdot \inner{\lambda, s} / m$
+			\EndWhile
+		\EndProcedure
+	\end{algorithmic}
+\end{algorithm}
+
+\paragraph{Advanced techniques}
+
+The \textit{predictor-corrector} approach solves the Newton system twice: first a ``prediction'' (affine scaling), then a ``correction'' that adds the nonlinear term $\Delta\Lambda\Delta S\, u$, reusing the matrix factorization.
+Multiple centrality corrections further improve centering.
+Adaptive selection of $\rho$ based on Newton step quality keeps the iterates near the central path.
+
+\paragraph{Convergence}
+
+The method achieves polynomial complexity $\mathcal{O}(\sqrt{m}\log(1/\varepsilon))$, with each iteration costing $\mathcal{O}(n^3)$ for the matrix factorization.
+Superlinear convergence in the final phase is typical.
+Primal and dual solutions converge simultaneously, providing both an optimal $x^*$ and optimal multipliers $\lambda^*$.
+The framework extends directly to SOCP and SDP.
+Numerical issues may arise in ill-conditioned or degenerate problems, where small slack or multiplier values cause instability in the $\Lambda S^{-1}$ scaling.

@@ -1,0 +1,169 @@
+\documentclass[12pt]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+
+\usepackage{amsmath, amsthm, amssymb}
+\usepackage{mathtools}
+\usepackage{calrsfs}
+\numberwithin{equation}{section}
+
+\usepackage{microtype}  
+\usepackage[osf,proportional]{libertinus-type1}
+\usepackage[amsthm]{libertinust1math}
+\linespread{1.06}
+
+\usepackage{geometry}
+\geometry{
+  tmargin  = 0.75in,
+  bmargin  = 0.75in,
+  lmargin  = 0.75in,
+  rmargin  = 0.75in,
+  headheight = 14pt,
+}
+
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\nouppercase{\leftmark}}
+\fancyhead[R]{\small\thepage}
+\renewcommand{\headrulewidth}{0.3pt}
+\fancypagestyle{plain}{\fancyhf{}\fancyfoot[C]{\small\thepage}\renewcommand{\headrulewidth}{0pt}}
+
+\usepackage{titlesec}
+\titleformat{\paragraph}[block]%
+  {\normalfont\normalsize\bfseries}{\theparagraph}{1em}{}
+\titlespacing*{\paragraph}{0pt}{2.5ex plus 0.8ex minus 0.2ex}{0.8em}
+
+\numberwithin{equation}{section}
+
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\C}{\mathbb{C}}
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Q}{\mathbb{Q}}
+\newcommand{\Rbar}{\overline{\mathbb{R}}}
+
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator{\dom}{dom}
+\DeclareMathOperator{\epi}{epi}
+\DeclareMathOperator{\conv}{conv}
+\DeclareMathOperator{\Cone}{Cone}
+\DeclareMathOperator{\rank}{rank}
+\DeclareMathOperator{\diag}{diag}
+\DeclareMathOperator{\tr}{tr}
+\DeclareMathOperator{\im}{im}
+\DeclareMathOperator{\Gr}{Gr}
+\DeclareMathOperator{\sign}{sign}
+
+\DeclarePairedDelimiter{\norm}{\lVert}{\rVert}
+\DeclarePairedDelimiter{\abs}{\lvert}{\rvert}
+\DeclarePairedDelimiter{\inner}{\langle}{\rangle}
+
+\newcommand{\Cdot}{\boldsymbol{\cdot}}
+
+\theoremstyle{plain}         
+\newtheorem{thm}{Theorem}[section]
+\newtheorem{lem}[thm]{Lemma}
+\newtheorem{cor}[thm]{Corollary}
+\newtheorem{prop}[thm]{Proposition}
+
+\theoremstyle{definition}       
+\newtheorem{defn}[thm]{Definition}
+
+\theoremstyle{remark}           
+\newtheorem{rem}[thm]{Remark}
+
+\usepackage[most]{tcolorbox}
+
+\newtcolorbox{exm}[1][]{%
+  enhanced,
+  frame hidden,
+  colback       = white,
+  borderline west = {1.5pt}{0pt}{black!18},
+  left          = 8pt,
+  right         = 8pt,
+  top           = 6pt,
+  bottom        = 6pt,
+  before skip   = 10pt plus 2pt,
+  after skip    = 10pt plus 2pt,
+  parbox        = false,
+  before upper  = {\ifstrempty{#1}{}{\textbf{#1.}\enspace}},
+}
+
+% Exercise environment — breakable, upper = statement, lower = solution
+\newtcolorbox{exercise}[2][]{%
+  enhanced,
+  breakable,
+  frame hidden,
+  colback       = white,
+  borderline west = {1.5pt}{0pt}{black!25},
+  left          = 8pt,
+  right         = 8pt,
+  top           = 6pt,
+  bottom        = 6pt,
+  before skip   = 14pt plus 3pt,
+  after skip    = 14pt plus 3pt,
+  parbox        = false,
+  before upper  = {\textbf{#2}\ifstrempty{#1}{}{\hfill \textnormal{\small\color{black!} [#1]}}\par\smallskip},
+  segmentation style = {solid, black!15, line width=0.3pt},
+  before lower  = {\textsc{Solution.}\enspace},
+}
+
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{subcaption}
+
+\usepackage{algorithm}
+\usepackage{algorithmicx}
+\usepackage{algpseudocode}
+
+\usepackage{enumitem}
+\setlist{nosep, left=0pt .. 1.5em}
+
+\usepackage[numbers, sort&compress]{natbib}
+\bibliographystyle{plainnat}
+
+\usepackage{hyperref}
+\hypersetup{
+  colorlinks  = true,
+  linkcolor   = black!60!blue,
+  citecolor   = black!60!blue,
+  urlcolor    = black!60!blue,
+  pdfauthor   = {Francesco Secoli},
+  pdftitle    = {Optimization for Data Science},
+}
+\usepackage[capitalise, noabbrev]{cleveref}
+
+\crefname{thm}{Theorem}{Theorems}
+\crefname{lem}{Lemma}{Lemmas}
+\crefname{cor}{Corollary}{Corollaries}
+\crefname{prop}{Proposition}{Propositions}
+\crefname{defn}{Definition}{Definitions}
+\crefname{rem}{Remark}{Remarks}
+
+\title{Optimization for Data Science}
+\author{Francesco Secoli}
+\date{Academic Year 2024--2025}
+
+\begin{document}
+\maketitle
+\thispagestyle{plain}
+\tableofcontents
+\newpage
+
+\input{_01_foundations}
+\input{_02_spectral}
+\input{_03_univariate}
+\input{_04_optimality}
+\input{_05_quadratic_methods}
+\input{_06_smooth_methods}
+\input{_07_nonsmooth}
+\input{_08_constrained_theory}
+\input{_09_constrained_algorithms}
+
+\newpage
+\bibliography{references}
+
+\end{document}

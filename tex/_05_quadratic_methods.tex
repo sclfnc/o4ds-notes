@@ -1,0 +1,379 @@
+% ================================================================
+%  §5  Gradient Methods for Quadratic Functions
+% ================================================================
+\section{Gradient Methods for Quadratic Functions}\label{sec:quadratic-methods}
+
+Quadratic functions are the simplest nontrivial objectives, yet they already expose the core tension of iterative optimization: how fast can we converge, and what controls the speed?
+This section answers both questions.
+We start with steepest descent, analyze its convergence in terms of the spectrum of $Q$, and then build the conjugate gradient method as a principled fix for steepest descent's weaknesses.
+At the end, we address the direct alternative: factoring $Q$ and solving a linear system.
+
+The practical setting: for moderate $n$ (up to $\approx 10^4$), direct methods costing $\mathcal{O}(n^3)$ are viable.
+For large $n$ ($10^5$ and beyond), we need iterative methods whose cost per step is $\mathcal{O}(n^2)$ --- or less, if $Q$ is sparse.
+We can afford ``many'' iterations before hitting the $\mathcal{O}(n^3)$ budget.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Iterative Methods}\label{ssec:iterative}
+
+\begin{defn}[Iterative procedure]\label{def:iterative}
+	Starting from an initial point $x^0$, an \textit{iterative procedure} generates a sequence $\{x^k\}$ whose objective values $\{f(x^k)\}$ should converge to $f^*$.
+	Convergence is not always guaranteed --- it requires monotonicity or similar structural conditions on the sequence.
+	If $f(x^k) \to -\infty$, the problem is unbounded.
+\end{defn}
+
+A sequence $\{f^k\}$ may not have a limit at all (oscillation).
+But any \textit{monotone} sequence has a limit (possibly $\pm\infty$): monotone algorithms are well-behaved in this sense.
+In practice, we produce a \textit{minimizing sequence} $\{x^k\}$ such that $f(x^k) \to f^*$.
+
+For a quadratic $f(x) = \frac{1}{2} x^T Q x + q^T x$ with $Q$ symmetric, the gradient at iterate $x^k$ is
+\begin{equation}\label{eq:quad-gradient}
+	g^k = \nabla f(x^k) = Q x^k + q,
+\end{equation}
+and the optimality condition is $g^* = 0$.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Steepest Descent}\label{ssec:steepest-descent}
+
+The gradient method moves in the direction $-g^k$ with a stepsize chosen to minimize $f$ along that ray.
+The key observation: the tomography $\varphi_{x^k, -g^k}(\alpha) = f(x^k - \alpha g^k) - f(x^k)$ is a univariate quadratic in $\alpha$:
+\begin{equation}\label{eq:sd-tomography}
+	\varphi(\alpha) = \frac{1}{2}\, \alpha^2 (g^k)^T Q g^k - \alpha \norm{g^k}^2.
+\end{equation}
+Since $(g^k)^T Q g^k \geq 0$ (for $Q \succeq 0$) and $-\norm{g^k}^2 < 0$ (when $g^k \neq 0$), we have $\varphi(\alpha) < 0$ for small $\alpha > 0$: the negative gradient is indeed a descent direction.
+The same information that says ``you can't stop'' simultaneously says ``you can improve over there.''
+
+Minimizing $\varphi$ gives the exact stepsize $\alpha^k = \norm{g^k}^2 / ((g^k)^T Q g^k)$.
+The variational characterization of eigenvalues (\Cref{thm:var-eigen}) bounds it: $1/\lambda_1 \leq \alpha^k \leq 1/\lambda_n$.
+
+\begin{algorithm}
+	\caption{Steepest Descent for Quadratic Functions (SDQ)}
+	\label{alg:SDQ}
+	\begin{algorithmic}[1]
+		\Require $Q \in \R^{n \times n}$, $q \in \R^n$, initial $x \in \R^n$, tolerance $\varepsilon > 0$
+		\Ensure Approximate minimizer of $\frac{1}{2} x^T Q x + q^T x$
+		\Procedure{SDQ}{$Q, q, x, \varepsilon$}
+			\While{$\norm{Qx + q} > \varepsilon$}
+				\State $g \gets Qx + q$
+				\State $\alpha \gets \norm{g}^2 / (g^T Q g)$ \Comment{Exact line search}
+				\State $x \gets x - \alpha g$
+			\EndWhile
+		\EndProcedure
+	\end{algorithmic}
+\end{algorithm}
+
+Each iteration costs $\mathcal{O}(n^2)$ (one matrix--vector product dominates).
+With a small implementation trick, the gradient at the next iterate can be updated as $g^{k+1} = g^k - \alpha^k Q g^k$, reusing the product $Q g^k$ already computed for the stepsize.
+
+The exact stepsize makes consecutive gradients orthogonal: $(g^{k+1})^T g^k = 0$.
+This is good locally, but causes a global zig-zag pattern --- the method keeps revisiting directions it has already explored.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Convergence for \texorpdfstring{$Q \succ 0$}{Q ≻ 0}}\label{ssec:convergence-sd}
+
+To measure progress, we use the \textit{$Q$-norm error}:
+\begin{equation}\label{eq:q-norm-error}
+	A(x) = \frac{1}{2}(x - x_*)^T Q (x - x_*),
+\end{equation}
+which equals $f(x) - f(x_*)$ (the absolute gap).
+
+\begin{thm}[Contraction of steepest descent]\label{thm:grad-conv}
+	For $Q \succ 0$, steepest descent with exact line search satisfies
+	\begin{equation}\label{eq:sd-contraction}
+		A(x^{k+1}) = \left(1 - \frac{\norm{g^k}^4}{((g^k)^T Q g^k)((g^k)^T Q^{-1} g^k)}\right) A(x^k).
+	\end{equation}
+\end{thm}
+
+The contraction factor depends on how well $g^k$ aligns with the eigenvectors of $Q$.
+To bound it uniformly, we need the condition number.
+
+\begin{defn}[Condition number]\label{def:kappa}
+	For $Q \succ 0$ with eigenvalues $\lambda_1 \geq \cdots \geq \lambda_n > 0$, the \textit{condition number} is
+	$\kappa = \kappa(Q) = \lambda_1 / \lambda_n \geq 1$.
+\end{defn}
+
+A direct bound on the Rayleigh-quotient ratio gives $r \leq (\kappa - 1)/\kappa < 1$, so $A(x^k) \leq r^k A(x^0) \to 0$ exponentially.
+The Kantorovich inequality tightens this considerably.
+
+\begin{thm}[Kantorovich inequality]\label{thm:kantorovich}
+	For any nonzero $x$ and $Q \succ 0$,
+	\begin{equation}\label{eq:kantorovich}
+		\frac{\norm{x}^4}{(x^T Q x)(x^T Q^{-1} x)} \geq \frac{4\, \lambda_1 \lambda_n}{(\lambda_1 + \lambda_n)^2}.
+	\end{equation}
+	This yields the tighter contraction bound
+	\begin{equation}\label{eq:sd-rate-kantorovich}
+		r \leq \left(\frac{\kappa - 1}{\kappa + 1}\right)^{\!2}.
+	\end{equation}
+\end{thm}
+
+When $\kappa = 1$ (all eigenvalues equal, i.e., $Q \propto I$), $r = 0$: the method converges in one step.
+When $\kappa \gg 1$, $r \approx 1 - 4/\kappa$: convergence is painfully slow.
+Example: $\kappa = 1000$ gives $r \approx 0.996$, so reaching $A(x^k) \leq 10^{-6}$ from $A(x^0) = 1$ requires $k \geq 3450$ iterations.
+That is a lot --- but also dimension-independent, valid for $n = 2$ and $n = 10^8$ alike.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Complexity and Convergence Rates}\label{ssec:complexity-rates}
+
+\begin{defn}[Complexity]\label{def:complexity}
+	The \textit{complexity} of an iterative method is the number of iterations $k$ needed to reach accuracy $\varepsilon$.
+	Three common criteria: $\norm{x^k - x_*} \leq \varepsilon$ (distance), $A(x^k) \leq \varepsilon$ (absolute gap), or $R(x^k) \leq \varepsilon$ (relative gap).
+	These are not interchangeable: $A(x^k) \leq \varepsilon$ implies $\norm{x^k - x_*} \leq \sqrt{\varepsilon / \lambda_n}$, and the converse involves $\lambda_1$.
+\end{defn}
+
+With a linear contraction rate $r < 1$, the error satisfies $v^k \leq r^k v^0 \leq \varepsilon$ whenever
+\begin{equation}\label{eq:linear-iteration-count}
+	k \geq \frac{\log(v^0 / \varepsilon)}{\log(1/r)}.
+\end{equation}
+This is $\mathcal{O}(\log(1/\varepsilon))$ --- good --- but the constant $1/\log(1/r)$ blows up as $r \to 1$.
+When $r \approx 1$, the denominator $\log(1/r) \approx 1 - r$ is small, giving $k \in \mathcal{O}(r/(1-r) \cdot \log(v^0/\varepsilon))$.
+
+\begin{defn}[Rate of convergence]\label{def:rate-convergence}
+	The \textit{rate} (or \textit{order}) of convergence is defined by
+	\begin{equation}\label{eq:convergence-rate}
+		\lim_{i \to \infty} \frac{f(x^{i+1}) - f^*}{(f(x^i) - f^*)^p} = r,
+	\end{equation}
+	where $p$ is the order and $r$ the rate constant.
+	For $p > 1$, each step gains more accuracy than the previous one.
+\end{defn}
+
+\begin{table}[ht]
+	\centering
+	\begin{tabular}{lccc}
+		\toprule
+		Rate & $p$ & $r$ & Complexity \\
+		\midrule
+		Sublinear   & 1       & 1   & $\mathcal{O}(1/\varepsilon)$ or worse \\
+		Linear      & 1       & $<1$ & $\mathcal{O}(\log(1/\varepsilon))$ \\
+		Superlinear & $(1,2)$ & 0   & between linear and quadratic \\
+		Quadratic   & 2       & $>0$ & $\mathcal{O}(\log\log(1/\varepsilon))$ \\
+		\bottomrule
+	\end{tabular}
+	\caption{Classification of convergence rates.
+		Quadratic convergence roughly doubles the number of correct digits at each step --- effectively $\mathcal{O}(1)$ in practice.}
+	\label{tab:conv-rates}
+\end{table}
+
+Steepest descent achieves linear convergence at best, with rate governed by $\kappa$.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{The Stopping Criterion}\label{ssec:stopping}
+
+The criterion one \emph{wants} is $A(x^k) \leq \varepsilon$ or $R(x^k) \leq \varepsilon$.
+But both require $f^*$, which is unknown.
+The practical proxy is $\norm{g^k} \leq \varepsilon'$ for some tolerance $\varepsilon'$.
+
+How do $\norm{g^k}$ and $A(x^k)$ relate?
+Since $g^k = Q(x^k - x_*)$, we have $\norm{g^k} \leq \lambda_1 \norm{x^k - x_*}$ --- but this is the wrong direction (large $\norm{g}$ does not imply large error, but small $\norm{g}$ does not directly imply small error either).
+The useful bound goes through the inner product:
+\begin{equation}\label{eq:gap-gradient-bound}
+	A(x^k) = \frac{1}{2} \inner{x^k - x_*, g^k} \leq \frac{1}{2} \norm{g^k} \norm{x^k - x_*}.
+\end{equation}
+If we knew an upper bound $\delta \geq \norm{x^k - x_*}$ (which we don't), then $\norm{g^k} \leq 2\varepsilon/\delta$ would guarantee $A(x^k) \leq \varepsilon$.
+If we knew $\lambda_n > 0$, then $\norm{g^k} \leq \sqrt{2\lambda_n \varepsilon}$ would suffice.
+
+In practice, exact control on the final gap is nontrivial.
+But for many applications, we don't need it: running until $\norm{g^k}$ is ``small enough'' works well, and the precise $\varepsilon$ mapping is rarely critical.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Hidden Dependence on Dimension and the \texorpdfstring{$\lambda_n = 0$}{λₙ = 0} Case}\label{ssec:lambda-n-zero}
+
+The condition number is formally dimension-free, but the eigenvalues $\lambda_1, \dots, \lambda_n$ themselves can depend on $n$.
+If $\kappa$ grows with $n$, so does the iteration count --- the ``dimension-independence'' is illusory.
+
+Worse: $\lambda_n = 0$ means $\kappa = \infty$, and the linear-rate analysis breaks down entirely.
+Does that mean the method fails?
+Not necessarily --- it just can't be proven convergent in the same way.
+
+\begin{thm}[Sublinear convergence for $\lambda_n = 0$]\label{thm:sublinear-quad}
+	If $Q \succeq 0$ (possibly singular) and $f^*$ is finite, the gradient method with fixed stepsize $\alpha = 1/\lambda_1$ satisfies \cite{bubeck2015}
+	\begin{equation}\label{eq:sublinear-quad}
+		f(x^k) - f^* \leq \frac{2 \lambda_1 \norm{x^0 - x_*}^2}{k - 1}.
+	\end{equation}
+\end{thm}
+
+This is $\mathcal{O}(1/k)$, i.e., $\mathcal{O}(1/\varepsilon)$ iterations to reach accuracy $\varepsilon$ --- sublinear convergence.
+Each extra digit of accuracy costs ten times more iterations.
+Beyond $10^{-3}$ or $10^{-4}$, this is typically impractical.
+The bound cannot be improved in general (for the class of convex $L$-smooth functions), and it can be even worse for non-smooth problems --- but that is a story for \Cref{sec:nonsmooth}.
+
+Can we do better than steepest descent when $\lambda_n > 0$?
+Yes --- dramatically.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Conjugate Gradient Method}\label{ssec:conjugate-gradient}
+
+Steepest descent zig-zags because consecutive gradients are orthogonal but not \textit{globally} independent: the method revisits directions it has already explored.
+Can we build search directions that avoid this?
+The conjugate gradient method does exactly this.
+
+\paragraph{Geometric motivation}
+
+If $Q = I$ (perfectly conditioned), steepest descent converges in one step.
+The idea: change coordinates so that $Q$ \emph{becomes} the identity.
+
+\begin{thm}[Square root decomposition]\label{thm:sqrt-decomp}
+	If $Q \succeq 0$, there exists a matrix $R = Q^{1/2}$ such that $Q = R^2$.
+	A symmetric choice is $R = H \sqrt{\Lambda}\, H^T$.
+	If $Q$ is nonsingular, so is $R$.
+\end{thm}
+
+Setting $z = Rx$ transforms the quadratic into $h(z) = \frac{1}{2} z^T I\, z + q^T R^{-1} z$: perfect conditioning.
+In $z$-space, sequential optimization over coordinate directions $u^1, \dots, u^n$ reaches $z_*$ in $n$ steps.
+Translating back to $x$-space: we need directions that are orthogonal \textit{after} the $R$-transformation.
+
+\begin{defn}[$Q$-conjugate directions]\label{def:q-conjugate}
+	Directions $p^0, \dots, p^{n-1}$ are \textit{$Q$-conjugate} if $(p^i)^T Q\, p^j = 0$ for all $i \neq j$.
+	This is equivalent to $\inner{Rp^i, Rp^j} = 0$: orthogonality in $z$-space.
+	Any set of $Q$-conjugate directions is linearly independent.
+\end{defn}
+
+\begin{thm}[Finite termination]\label{thm:cg-finite}
+	If $p^0, \dots, p^{n-1}$ are $Q$-conjugate, the method $x^{i+1} = x^i + \alpha^i p^i$ with exact line search terminates in at most $n$ steps.
+	In floating-point arithmetic, finite termination breaks down, but the early iterates still converge fast.
+\end{thm}
+
+How do we generate $Q$-conjugate directions cheaply, without computing the eigenvectors?
+
+\begin{defn}[Fletcher--Reeves formula]\label{def:fletcher-reeves}
+	The conjugate gradient method builds directions via
+	\begin{equation}\label{eq:fletcher-reeves}
+		p^k = -g^k + \beta^k\, p^{k-1},
+		\qquad
+		\beta^k = \frac{(g^k)^T Q\, p^{k-1}}{(p^{k-1})^T Q\, p^{k-1}},
+		\qquad
+		\alpha^k = \frac{-(g^k)^T p^k}{(p^k)^T Q\, p^k}.
+	\end{equation}
+	An equivalent (cheaper) formulation for quadratics:
+	$\alpha^k = \norm{g^k}^2 / ((p^k)^T Q p^k)$ and $\beta^k = \norm{g^k}^2 / \norm{g^{k-1}}^2$,
+	which avoids the product $Q p^{k-1}$ in the $\beta$ computation.
+\end{defn}
+
+\begin{algorithm}
+	\caption{Conjugate Gradient for Quadratic Functions (CGQ)}
+	\label{alg:CGQ}
+	\begin{algorithmic}[1]
+		\Require $Q \in \R^{n \times n}$, $q \in \R^n$, initial $x \in \R^n$, tolerance $\varepsilon > 0$
+		\Ensure Approximate minimizer of $\frac{1}{2} x^T Q x + q^T x$
+		\Procedure{CGQ}{$Q, q, x, \varepsilon$}
+			\State $p \gets 0$
+			\While{$\norm{Qx + q} > \varepsilon$}
+				\State $g \gets Qx + q$
+				\If{$p = 0$}
+					\State $p \gets -g$ \Comment{First direction: steepest descent}
+				\Else
+					\State $\beta \gets (g^T Q\, p) / (p^T Q\, p)$
+					\State $p \gets -g + \beta\, p$ \Comment{$Q$-conjugate correction}
+				\EndIf
+				\State $\alpha \gets -(g^T p) / (p^T Q\, p)$
+				\State $x \gets x + \alpha\, p$
+			\EndWhile
+		\EndProcedure
+	\end{algorithmic}
+\end{algorithm}
+
+After streamlining, each iteration costs about the same as steepest descent: one matrix--vector product plus a few $\mathcal{O}(n)$ operations.
+The method is worth using only if it converges in substantially fewer iterations --- and it does.
+
+Like steepest descent, the conjugate gradient generates gradients satisfying $g^{k+1} \perp g^k$.
+But unlike steepest descent, $g^k$ is also orthogonal to \emph{all} previous gradients: the zig-zag disappears.
+
+\paragraph{Convergence rate}
+
+\begin{thm}[Convergence of conjugate gradient]\label{thm:cg-conv}
+	The conjugate gradient method satisfies
+	\begin{equation}\label{eq:cg-rate}
+		A(x^{k+1}) \leq 2 \left(\frac{\sqrt{\kappa} - 1}{\sqrt{\kappa} + 1}\right)^{\!k} A(x^0).
+	\end{equation}
+	The rate depends on $\sqrt{\kappa}$ instead of $\kappa$ --- a dramatic improvement over steepest descent.
+\end{thm}
+
+For $\kappa = 1000$: steepest descent gives $r \approx 0.996$; conjugate gradient gives $r \approx 0.938$.
+The difference is enormous over thousands of iterations.
+
+A finer bound exploits the eigenvalue distribution directly.
+
+\begin{thm}[Eigenvalue-dependent bound]\label{thm:cg-eigen-conv}
+	After $k$ steps,
+	\begin{equation}\label{eq:cg-eigenvalue-bound}
+		A(x^{k+1}) \leq \left(\frac{\lambda_k - \lambda_n}{\lambda_k + \lambda_n}\right)^{\!k} A(x^0),
+	\end{equation}
+	where $\lambda_k$ is the $k$-th largest eigenvalue.
+	Two consequences:
+	\begin{itemize}
+		\item If $Q$ has only $k$ distinct eigenvalues, the method terminates in $k$ iterations --- regardless of $n$.
+		\item If $k$ eigenvalues are clustered near a single value, convergence behaves as if the effective dimension were $n - k$.
+	\end{itemize}
+	The more clustered the spectrum, the faster the method.
+\end{thm}
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Preconditioning}\label{ssec:preconditioning}
+
+If we can't change $Q$, we can at least change how we look at it.
+
+\begin{defn}[Preconditioned system]\label{def:preconditioner}
+	Given a nonsingular matrix $P$, the substitution $z = Px$ transforms the quadratic into
+	\begin{equation}\label{eq:preconditioned-system}
+		h(z) = \frac{1}{2} z^T (P^{-T} Q\, P^{-1})\, z + q^T P^{-1} z.
+	\end{equation}
+	The transformed Hessian is $\tilde{Q} = P^{-T} Q\, P^{-1}$, and convergence depends on $\kappa(\tilde{Q})$.
+\end{defn}
+
+The ideal preconditioner has $P = Q^{1/2}$, giving $\tilde{Q} = I$ and one-step convergence.
+But computing $Q^{1/2}$ costs $\mathcal{O}(n^3)$ and defeats the purpose.
+A good preconditioner approximates $Q$ well enough to reduce $\kappa$ substantially while being cheap to ``invert'' (i.e., to solve $Pw = z$).
+
+Common choices:
+\begin{itemize}
+	\item \textit{Diagonal:} $P = \sqrt{\diag(Q)}$ --- trivial to invert, but only helps when off-diagonal entries are small.
+		When $Q \not\succ 0$, a heuristic fix replaces zero or negative diagonal entries with $1$.
+	\item \textit{Incomplete Cholesky:} a sparse approximation of the full Cholesky factor \cite{nocedal2006}.
+		More expensive to compute but often dramatically reduces $\kappa$.
+\end{itemize}
+
+The art of preconditioning is problem-specific: the best preconditioner exploits the structure of \emph{your} particular $Q$.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Cholesky Factorization}\label{ssec:cholesky}
+
+For moderate-sized problems, solving $Qx + q = 0$ directly is often the best strategy.
+No iterative guesswork, no convergence rate to worry about --- just algebra.
+
+\begin{defn}[Cholesky decomposition]\label{def:cholesky}
+	For $Q \succeq 0$, there exists a lower triangular matrix $L$ such that $Q = L L^T$.
+	The entries of $L$ are computed recursively:
+	\begin{equation}\label{eq:cholesky-entries}
+		L_{ii} = \sqrt{Q_{ii} - \sum_{k=1}^{i-1} L_{ik}^2},
+		\qquad
+		L_{ji} = \frac{Q_{ji} - \sum_{k=1}^{i-1} L_{jk} L_{ik}}{L_{ii}}
+		\quad (j > i).
+	\end{equation}
+\end{defn}
+
+The factorization costs $\mathcal{O}(n^3)$.
+Once $L$ is known, we rewrite $Qx = -q$ as two triangular systems:
+\begin{equation}\label{eq:cholesky-solve}
+	L w = -q, \qquad L^T x = w.
+\end{equation}
+Each triangular solve (\textit{backsolve}) costs $\mathcal{O}(n^2)$: at step $k$, compute $x_k = (b_k - \sum_{i < k} L_{ki} x_i) / L_{kk}$.
+Only sums and products, plus $n$ divisions (numerically delicate when $L_{kk} \approx 0$).
+
+The factorization also serves as a definiteness test.
+If $Q_{kk} - \sum_{i<k} L_{ik}^2 = 0$ at some step, the matrix is singular ($Q \not\succ 0$); the factorization produces a lower trapezoidal matrix with a zero diagonal block.
+If the quantity is negative, $Q \not\succeq 0$ --- the matrix is indefinite.
+
+Why Cholesky rather than the spectral decomposition $R = H\sqrt{\Lambda}\, H^T$?
+Both cost $\mathcal{O}(n^3)$, but $L$ is triangular: solving $Lw = z$ is a single forward substitution, whereas using $R$ requires a full matrix--vector product.
+Cholesky has a smaller constant and better numerical properties for this task.
+
+The choice between iterative (CG) and direct (Cholesky) methods depends on $n$, sparsity, and the number of right-hand sides.
+For a single solve with dense $Q$ and moderate $n$, Cholesky wins.
+For very large $n$, sparse $Q$, or when only an approximate solution is needed, CG is the tool of choice.

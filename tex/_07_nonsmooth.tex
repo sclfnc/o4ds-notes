@@ -1,0 +1,338 @@
+% ================================================================
+%  §7  Nonsmooth Unconstrained Optimization
+% ================================================================
+\section{Nonsmooth Unconstrained Optimization}\label{sec:nonsmooth}
+
+Smooth optimization has clean gradients, reliable descent, and convergence rates driven by curvature.
+Drop the smoothness assumption and most of that machinery breaks.
+Yet nonsmooth problems are unavoidable: $\ell_1$ regularization, hinge losses, max-type objectives --- all introduce points where derivatives don't exist.
+This section first explains \emph{why} nonsmoothness arises (fitting problems, regularization, classification), then develops the theory (subgradients, subdifferential calculus) and the algorithms (subgradient methods, smoothing, bundle methods) needed to handle it.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Fitting Problems and Stochastic Gradients}\label{ssec:fitting}
+
+The problems at the heart of machine learning have a specific additive structure worth exploiting.
+
+\begin{defn}[Fitting problem]\label{def:fitting}
+	Given inputs $\mathcal{X} = [x^s \in \R^h]_{s \in S}$ and outputs $y = [y^s \in \R^k]_{s \in S}$ with $S = \{1, \dots, m\}$, define:
+	\begin{itemize}
+		\item \textit{Predictor:} $\pi(x; w) \colon \R^h \to \R^k$, parametric in $w \in \R^n$.
+		\item \textit{Loss function:} $\mathcal{L} \colon \R^k \times \R^k \to \R$.
+		\item \textit{Objective:}
+			$\displaystyle \min\Bigl\{f(w) = \sum_{s \in S} f_s(w) = \sum_{s \in S} \mathcal{L}(y^s, \pi(x^s; w)) : w \in \R^n\Bigr\}$.
+	\end{itemize}
+	The full gradient is $\nabla f(w) = \sum_{s \in S} \nabla f_s(w)$ --- a sum of $m$ individual gradients.
+\end{defn}
+
+\begin{exm}[Linear least squares]
+	With $\pi(x; w) = \inner{x, w}$ and $\mathcal{L}(y, z) = (y - z)^2/2$:
+	$f_s(w) = (y^s - \inner{x^s, w})^2/2$ and $\nabla f_s(w) = -x^s(y^s - \inner{x^s, w})$.
+\end{exm}
+
+When $m$ is large, computing the full gradient at every step is expensive.
+
+\begin{defn}[Incremental gradient]\label{def:incremental-grad}
+	For a small subset $K \subset S$,
+	$\nabla f^K(w) = \sum_{s \in K} \nabla f_s(w)$.
+	This is much cheaper but is not guaranteed to be a descent direction for $f$.
+\end{defn}
+
+\begin{defn}[Stochastic gradient]\label{def:stochastic-grad}
+	Stochastic gradient is incremental gradient with $K$ chosen at random.
+	Results are typically stated in terms of expectations and Cesàro averages
+	$\bar{x}^k = \frac{1}{k+1} \sum_{j=0}^{k} x^j$.
+	With $|K| = 1$ (single-sample minibatch) and $f$ $\tau$-convex \cite{bubeck2015}:
+	$\mathbb{E}[f(\bar{x}^k) - f^*] \leq \varepsilon$ for $k \geq \mathcal{O}(1/\varepsilon^2)$.
+	Results improve as $|K|$ grows, but so does iteration cost.
+	The stepsize $\alpha^k$ is chosen a priori; only $g^k$ is used, not $f(x^k)$.
+\end{defn}
+
+First-order methods are ``quite robust'' to errors in the gradient.
+An inexact gradient that points roughly in the right direction can still drive convergence --- a property that will prove crucial when derivatives don't even exist.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Regularization and Feature Selection}\label{ssec:regularization}
+
+A common strategy to control model complexity is to add a regularizer $\Omega(w)$:
+\begin{equation}\label{eq:regularized-problem}
+	\min\Bigl\{\sum_{s \in S} \mathcal{L}(y^s, \pi(x^s; w)) + \mu\, \Omega(w) : w \in \R^n\Bigr\}.
+\end{equation}
+Two standard choices:
+\begin{itemize}
+	\item \textit{Ridge:} $\Omega(w) = \frac{1}{2}\norm{w}_2^2 \in C^\infty$, with $\nabla\Omega(w) = w$.
+		Smooth, strongly convex, well-behaved.
+	\item \textit{Lasso:} $\Omega(w) = \norm{w}_1$ --- the best convex approximation of the sparsity-inducing $\norm{w}_0$.
+		Promotes sparsity in practice, but is \emph{not} differentiable ($\notin C^1$).
+\end{itemize}
+An alternative is \textit{feature selection}: directly restricting which components of $w$ can be nonzero.
+But $\norm{\cdot}_1$ regularization achieves a similar effect while keeping the problem convex.
+
+The Lasso is the canonical example of why nonsmooth optimization matters: the kink at $w_i = 0$ is precisely where sparsity is enforced, and smoothing it away would defeat the purpose.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Classification: SVM and SVR}\label{ssec:svm-svr}
+
+Consider binary classification with $y^s \in \{-1, 1\}$.
+An affine hyperplane $H(w, b) = \{x : \inner{w, x} = b\}$ separates the two classes if $y^s(\inner{w, x^s} - b) \geq 1$ for all $s$.
+The margin between the two classes is $2/\norm{w}$; maximizing it leads to minimizing $\norm{w}^2$.
+When perfect separation is impossible, we introduce slack.
+
+\begin{defn}[Support Vector Machine]\label{def:svm}
+	\begin{equation}\label{eq:svm}
+		\min_{w, b}\Bigl\{\norm{w}^2 + C \sum_{s \in S} \max\{1 - y^s(\inner{w, x^s} - b),\; 0\}\Bigr\}.
+	\end{equation}
+	The term $\norm{w}^2$ is the regularizer (model complexity), $C$ weights the empirical loss, and $\max\{\cdot, 0\}$ is the \textit{hinge loss}.
+	The hinge loss makes the objective convex but non-differentiable: $[\max\{\cdot, 0\}]'(0)$ is undefined.
+\end{defn}
+
+\begin{defn}[Support Vector Regression]\label{def:svr}
+	For regression ($y^s \in \R$), SVR uses the $\varepsilon$-insensitive loss:
+	\begin{equation}\label{eq:svr}
+		\min_{w, b}\Bigl\{\norm{w}^2 + C \sum_{s \in S} \max\{|\inner{w, x^s} - b - y^s| - \varepsilon,\; 0\}\Bigr\}.
+	\end{equation}
+	Predictions within $\varepsilon$ of the target incur no penalty.
+	The objective is again convex but non-differentiable.
+\end{defn}
+
+Both SVM and SVR have rich dual formulations that we exploit in \Cref{sec:constrained-theory}.
+For now, the key point: these are mainstream ML models with nonsmooth objectives.
+Smooth methods fail on them --- and that failure is not a bug, it is the nature of the problem.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Why Smooth Methods Fail}\label{ssec:smooth-fail}
+
+When $f \notin C^1$, fixed-stepsize gradient descent breaks.
+The direction $-g$ for $g \in \partial f(x)$ (a \textit{subgradient}, defined below) may not be a descent direction: there can exist points where $f(x + \alpha d) \geq f(x)$ for all $\alpha > 0$ and some $d = -g$.
+The norm $\norm{g}$ is no longer a reliable proxy for $A(x)$: $\norm{g}$ small implies proximity to $f^*$ only in one direction.
+And the stopping criterion $\norm{g} \leq \varepsilon$ can be unreliable --- the algorithm may stop far from the optimum.
+
+\begin{table}[ht]
+	\centering
+	\begin{tabular}{l|c|c}
+		\toprule
+		Aspect & $f \in C^1$ & $f \notin C^1$ \\
+		\midrule
+		Direction & unique $d = -\nabla f(x)$ & multiple $d = -g,\; g \in \partial f(x)$ \\
+		Descent guarantee & small $\alpha$ ensures $f(x + \alpha d) < f(x)$ & possible $f(x + \alpha d) \geq f(x)\;\forall\,\alpha$ \\
+		$\norm{d}$ as accuracy & $\norm{d}$ small $\Leftrightarrow$ close to $f^*$ & $\norm{d}$ small $\Rightarrow$ close, $\not\Leftarrow$ \\
+		Fixed stepsize & $\norm{x^{k+1} - x^k} \to 0$ automatic & fails unless $\alpha^k \to 0$ \\
+		\bottomrule
+	\end{tabular}
+	\caption{Smooth vs.\ nonsmooth: practical differences.}
+	\label{tab:smooth-nonsmooth-practical}
+\end{table}
+
+The complexity picture is also worse.
+
+\begin{table}[ht]
+	\centering
+	\begin{tabular}{c|c|c}
+		\toprule
+		Function class & Properties & Best achievable rate \\
+		\midrule
+		$f \in C^1$ & $\tau$-convex, $L$-smooth & $\mathcal{O}(\log(1/\varepsilon))$ \\
+		$f \notin C^1$ & $\tau$-convex, $L$-Lipschitz & $\Omega(L^2/\varepsilon)$ \\
+		$f \in C^1$ & convex, $L$-smooth & $\mathcal{O}(1/\sqrt{\varepsilon})$ \\
+		$f \notin C^1$ & convex, $L$-Lipschitz & $\Omega(L^2/\varepsilon^2)$ \\
+		\bottomrule
+	\end{tabular}
+	\caption{Convergence rates: smooth vs.\ nonsmooth.
+		Losing $C^1$ costs one or two orders of magnitude in the exponent.}
+	\label{tab:smooth-vs-nonsmooth}
+\end{table}
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Subgradients and the Subdifferential}\label{ssec:subgradients}
+
+When $f$ isn't differentiable, we don't lack first-order information --- we have \emph{too much} of it.
+
+\begin{defn}[Subgradient]\label{def:subgradient}
+	A vector $g \in \R^n$ is a \textit{subgradient} of a convex function $f$ at $x$ if
+	\begin{equation}\label{eq:subgradient-condition}
+		f(z) \geq f(x) + \inner{g, z - x} \qquad \forall\, z \in \R^n.
+	\end{equation}
+	Key properties: $g = 0$ implies $x$ is a global minimum (and conversely, $0 \in \partial f(x)$ iff $x$ minimizes $f$);
+	if $f$ is differentiable at $x$, the unique subgradient is $\nabla f(x)$;
+	at non-differentiable points, multiple subgradients exist, and not all are descent directions.
+\end{defn}
+
+\begin{defn}[Subdifferential]\label{def:subdifferential}
+	The \textit{subdifferential} of $f$ at $x$ is
+	$\partial f(x) = \{g \in \R^n : g \text{ is a subgradient of } f \text{ at } x\}$.
+	For convex $f$, $\partial f(x)$ is a nonempty, compact, convex set at every $x$.
+	The \textit{steepest descent subgradient} is $g^* = \argmin_{g \in \partial f(x)} \norm{g}$, and $0 \in \partial f(x)$ iff $x$ is a global minimum.
+\end{defn}
+
+Despite the multiple subgradients, every $g \in \partial f(x)$ satisfies $\inner{g, x^* - x} \leq f(x^*) - f(x) \leq 0$: the negative subgradient ``points toward'' $x^*$ in the sense of reducing $f$.
+This is enough to drive convergence --- but not to guarantee descent at each step.
+
+\begin{exm}[Subdifferential of a pointwise maximum]\label{exm:subdiff-max}
+	Let $f(x) = \max\{f_1(x), f_2(x)\}$ with $f_1(x) = (x-1)^2$ and $f_2(x) = (x+1)^2$.
+	The two parabolas cross at $x = 0$, where $f_1(0) = f_2(0) = 1$.
+	For $x > 0$: $f = f_1$, so $\partial f(x) = \{2(x-1)\}$.
+	For $x < 0$: $f = f_2$, so $\partial f(x) = \{2(x+1)\}$.
+	At $x = 0$: both are active, $\nabla f_1(0) = -2$, $\nabla f_2(0) = 2$, so $\partial f(0) = \conv\{-2, 2\} = [-2, 2]$.
+	Since $0 \in [-2, 2]$, the point $x = 0$ satisfies the optimality condition --- but it is \emph{not} the global minimum (which is at $x = \pm 1$ with $f = 0$).
+	The minimum of $\norm{g}$ over $g \in \partial f(0)$ is $g^* = 0$: the steepest descent subgradient gives no useful direction.
+\end{exm}
+
+\paragraph{Subdifferential calculus}
+
+Calculus rules parallel the smooth case, with set-valued additions:
+\begin{itemize}
+	\item \textit{Linearity:} $\partial[\alpha f + \beta g](x) = \alpha\, \partial f(x) + \beta\, \partial g(x)$ for $\alpha, \beta \geq 0$.
+	\item \textit{Affine pre-composition:} $\partial[f(Ax + b)] = A^T [\partial f](Ax + b)$.
+	\item \textit{Chain rule (monotone):} if $g \colon \R \to \R$ is increasing, $\partial[g(f(x))] = [\partial g](f(x)) \cdot [\partial f](x)$.
+	\item \textit{Maximum:} for $f(x) = \max\{f_1(x), \dots, f_m(x)\}$ with active set $I(x) = \{i : f_i(x) = f(x)\}$:
+		$\partial f(x) = \conv\bigl(\bigcup_{i \in I(x)} \partial f_i(x)\bigr)$.
+	\item \textit{Partial minimization:} if $f(x) = \inf\{g(x, y) : y \in \R^m\}$ and $y^*$ achieves the infimum, then $\partial f(x) = \{s : (s, 0) \in \partial g(x, y^*)\}$.
+	\item \textit{Infimal convolution:} if $f(x) = \inf\{f_1(x_1) + f_2(x_2) : x_1 + x_2 = x\}$ with optimal split $x_1^* + x_2^* = x$, then $\partial f(x) = \partial f_1(x_1^*) \cap \partial f_2(x_2^*)$.
+\end{itemize}
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Subgradient Methods}\label{ssec:subgradient-methods}
+
+Any subgradient $g^k \in \partial f(x^k)$ points toward $x^*$, so stepping along $-g^k$ should bring us closer.
+The iteration is $x^{k+1} = x^k - \alpha^k g^k$.
+
+The fundamental relationship driving the analysis is:
+\begin{equation}\label{eq:subgradient-fundamental}
+	\norm{x^{k+1} - x_*}^2
+	= \norm{x^k - x_*}^2
+		+ \underbrace{2\alpha^k(f^* - f(x^k))}_{\leq\, 0}
+		+ (\alpha^k)^2 \norm{g^k}^2.
+\end{equation}
+As $\alpha^k \to 0$, the negative middle term dominates the positive last term, pulling the iterates toward $x_*$.
+
+\paragraph{Diminishing and square-summable stepsize (DSS)}
+
+\begin{defn}[DSS condition]\label{def:dss}
+	$\sum_{k=0}^{\infty} \alpha^k = \infty$ and $\sum_{k=0}^{\infty} (\alpha^k)^2 < \infty$.
+	A typical example is $\alpha^k = 1/(k+1)$.
+\end{defn}
+
+If $\norm{g^k} \leq L$ ($f$ is $L$-Lipschitz), summing the fundamental relationship over $k$ iterations shows that $f(x^k) - f^* \to 0$ along a subsequence: the first sum diverges and the second converges.
+But convergence is not monotonic and there is no control on individual stepsizes --- only on the long-term average.
+The stepsize is chosen a priori; $f(x^k)$ is never used, only $g^k$.
+
+\paragraph{Polyak stepsize}
+
+If we knew $f^*$, we could be far more adaptive.
+The distance reduction $\norm{x^{k+1} - x_*}^2 - \norm{x^k - x_*}^2$ is a quadratic in $\alpha$, minimized at
+\begin{equation}\label{eq:polyak-stepsize}
+	\alpha^k_* = \frac{f(x^k) - f^*}{\norm{g^k}^2}.
+\end{equation}
+
+\begin{defn}[Polyak stepsize]\label{def:polyak}
+	$\alpha^k \in (0, 2\alpha^k_*)$ ensures $\norm{x^{k+1} - x_*} < \norm{x^k - x_*}$ at every step.
+	Setting $\alpha^k = \alpha^k_*$ and telescoping gives
+	$\bar{f}^k - f^* \leq L\norm{x^0 - x_*}/\sqrt{k} = \mathcal{O}(1/\sqrt{k})$,
+	i.e., $\mathcal{O}(1/\varepsilon^2)$ iterations.
+\end{defn}
+
+Reducing $\varepsilon$ from $10^{-3}$ to $10^{-4}$ takes $100$ times more iterations: $\varepsilon < 10^{-4}$ is rarely practical.
+The Polyak stepsize would be optimal if $f^*$ were known; in practice, it must be estimated.
+
+\paragraph{Target level stepsize}
+
+When $f^*$ is unknown, we estimate it and revise when progress stalls.
+A reference level $f_{\mathrm{ref}}$ and threshold $\delta$ define a target approximating $f^*$.
+Significant improvement updates $f_{\mathrm{ref}}$; stagnation shrinks $\delta$.
+The record sequence $\{\bar{f}^k\} \to f^*$, but no clean stopping criterion exists --- typically one runs for a fixed budget.
+Many parameters are involved ($\rho, \beta, \delta_0, R$), making tuning nontrivial.
+
+\paragraph{Deflected subgradient}
+
+A momentum-like deflection smooths the search direction:
+\begin{equation}\label{eq:deflected-subgradient}
+	d^k = \gamma^k g^k + (1 - \gamma^k) d^{k-1},
+	\qquad
+	x^{k+1} = x^k - \alpha^k d^k.
+\end{equation}
+Two convergence strategies: \textit{stepsize-restricted} (deflection grows $\Rightarrow$ stepsize shrinks) or \textit{deflection-restricted} (stepsize chosen first $\Rightarrow$ deflection adapts) \cite{dantonio2009}.
+The deflection parameter can be chosen optimally: $\gamma^k = \argmin_{\gamma \in [0,1]} \norm{\gamma g^k + (1 - \gamma) d^{k-1}}^2$.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Smoothed Gradient Methods}\label{ssec:smoothing}
+
+Can we modify $f$ slightly to make it smooth and then apply fast gradient methods?
+Consider a function of the form $f(x) = \max\{x^T A z : z \in Z\}$ where $Z$ is convex and compact.
+For a given $x$, any optimal $\bar{z}$ gives $A\bar{z} \in \partial f(x)$; if multiple optima exist, $f \notin C^1$.
+
+The smoothed version adds a penalty:
+\begin{equation}\label{eq:smoothed-objective}
+	f_\mu(x) = \max\Bigl\{x^T A z - \frac{\mu}{2}\norm{z}^2 : z \in Z\Bigr\}.
+\end{equation}
+This is differentiable ($f_\mu \in C^1$), with Lipschitz constant $L_\mu = \norm{A}^2 / \mu$.
+
+\begin{thm}[Smoothing bounds]\label{thm:smoothing}
+	Let $K = \max\{\norm{z}^2/2 : z \in Z\}$.
+	Then $f_\mu(x) \leq f(x) \leq f_\mu(x) + \mu K$, so $f_\mu \to f$ as $\mu \to 0$.
+\end{thm}
+
+Choosing $\mu = \varepsilon/(2K)$ and minimizing $f_\mu$ to accuracy $\varepsilon/2$ gives an $\varepsilon$-optimal solution to $f$.
+Using the accelerated gradient on $f_\mu$ (which has $L_\mu = 2\norm{A}^2 K / \varepsilon$), the total complexity is $\mathcal{O}(1/\varepsilon)$ --- a big improvement over the $\mathcal{O}(1/\varepsilon^2)$ of subgradient methods \cite{nesterov2005}.
+
+In practice, the picture is less rosy.
+The smoothing parameter forces steps of size $1/L_\mu = \mathcal{O}(\varepsilon)$ --- far too short to make progress early on.
+Subgradient methods converge faster initially but stagnate around $10^{-4}$; the smoothed method can reach $10^{-6}$, but may require $\sim\!10^6$ iterations.
+The method is ``parameter-free'' in theory (given $K$), but estimating $K$ is itself a nontrivial convex maximization problem.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Bundle Methods}\label{ssec:bundle-methods}
+
+Subgradient methods use one subgradient per step and throw it away.
+Bundle methods \emph{accumulate} first-order information across iterations to build a better model --- a kind of first-order Newton method, without second-order information.
+
+Given a point $x$, an oracle returns $f(x)$ and $g \in \partial f(x)$, defining a global linear underestimator:
+$l_{x, f(x), g}(z) = f(x) + \inner{g, z - x} \leq f(z)$ for all $z$.
+
+\begin{defn}[Cutting plane model]\label{def:bundle}
+	The \textit{bundle} at step $k$ collects oracle outputs: $\mathcal{B}^k = \{(x^j, f^j, g^j) : j < k\}$.
+	The \textit{cutting plane model} is
+	\begin{equation}\label{eq:cutting-plane}
+		f_{\mathcal{B}}^k(x) = \max\{f^j + \inner{g^j, x - x^j} : (x^j, f^j, g^j) \in \mathcal{B}^k\} \leq f(x).
+	\end{equation}
+	This is a piecewise-linear convex underestimate of $f$.
+	Minimizing it reduces to a linear program.
+\end{defn}
+
+\begin{thm}[Convex functions as maxima of affine functions]\label{thm:convex-max-affine}
+	Every convex $f$ satisfies $f(x) = \max\{f(z) + \inner{g, x - z} : z \in \R^n,\, g \in \partial f(z)\}$.
+	So $f = f_{\mathcal{B}}$ for a sufficiently large (potentially infinite) bundle.
+\end{thm}
+
+\paragraph{Cutting plane algorithm}
+
+Minimize $f_{\mathcal{B}}$, evaluate $f$ at the minimizer, add a new cut, repeat.
+Model values $v^k$ are nondecreasing; record values $\bar{f}^k = \min\{f(x^j) : j \leq k\}$ are nonincreasing.
+Both converge to $f^*$.
+
+The method works well when $f$ is polyhedral and few facets are active at $x^*$.
+But it has serious drawbacks: iterates can jump erratically (no locality), the bundle grows without bound, the master problem becomes expensive, and worst-case complexity can reach $\mathcal{O}(1/\varepsilon^{n/2})$ \cite{frangioni2020}.
+
+\paragraph{Proximal bundle method}
+
+To stabilize the cutting plane, add a proximity term.
+The \textit{stabilized master problem} is
+\begin{equation}\label{eq:proximal-bundle}
+	\min_x \Bigl\{f_{\mathcal{B}}(x) + \frac{\mu}{2}\norm{x - \bar{x}}^2\Bigr\},
+\end{equation}
+where $\bar{x}$ is the \textit{stability center} (best point so far) and $\mu > 0$ controls regularization.
+The quadratic term acts like a trust region: if $\mu$ is too large, the iterate stays close to $\bar{x}$; if too small, we recover the unstable cutting plane.
+
+The algorithm alternates between \textit{serious steps} (the candidate significantly improves $f$, so $\bar{x}$ is updated) and \textit{null steps} (improvement is insufficient, only the bundle is enriched).
+The optimality condition for the stabilized subproblem gives $-\mu d^* \in \partial f_{\mathcal{B}}(\bar{x} + d^*)$, leading to $f_{\mathcal{B}}(\bar{x} + d^*) - f(\bar{x}) \leq -\mu\norm{d^*}^2$.
+As $k \to \infty$, $\norm{d^*} \to 0$, guaranteeing convergence.
+
+Reducing the bundle size $|\mathcal{B}|$ lowers the master-problem cost but increases iterations: small $|\mathcal{B}|$ resembles a subgradient method.
+Keeping $\mathcal{B}$ large speeds convergence.
+The worst-case complexity is $\mathcal{O}(1/\varepsilon^2)$ --- same as subgradient methods --- but practical performance is typically much better thanks to the accumulated information and stabilization \cite{frangioni2020}.

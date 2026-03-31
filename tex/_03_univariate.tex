@@ -1,0 +1,391 @@
+% ================================================================
+%  §3  Univariate Optimization
+% ================================================================
+\section{Univariate Optimization}\label{sec:univariate}
+
+Linear and quadratic functions have closed-form optima.
+For anything more complex --- a transcendental objective, a polynomial of high degree, a black-box simulation --- we need iterative algorithms.
+This section develops the key univariate methods, from slow and robust to fast and fragile. At each step, we trade a stronger assumption on $f$ for a faster algorithm. The section ends with the question: what if the local optimum we find is not the global one?
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Lipschitz Continuity: Making Optimization Possible}\label{ssec:lipschitz}
+
+\Cref{ssec:why-hard} showed that optimization is impossible for arbitrary functions --- isolated minima can hide in arbitrarily narrow spikes.
+The cure: impose a ``speed limit'' on how fast $f$ can change.
+
+\begin{defn}[Lipschitz continuous function]\label{def:lipschitz}
+	A function $f$ is \textit{Lipschitz continuous} with constant $L > 0$ on a set $X$ if
+	\begin{equation}\label{eq:lipschitz-condition}
+		|f(x) - f(z)| \leq L\, |x - z| \qquad \forall\, x, z \in X.
+	\end{equation}
+	When $X = \R$, $f$ is \textit{globally} $L$-Lipschitz.
+	When $X = [x - \varepsilon,\, x + \varepsilon]$ for some $\varepsilon > 0$, $f$ is \textit{locally} $L$-Lipschitz at $x$.
+	The constant $L$ depends on $X$: locally Lipschitz everywhere does not imply globally Lipschitz ($f(x) = x^2$ is the standard counterexample).
+\end{defn}
+
+\begin{defn}[Continuity]\label{def:continuity}
+	A function $f$ is \textit{continuous} at $x$ if
+	\begin{equation}\label{eq:continuity}
+		\forall\, \varepsilon > 0,\; \exists\, \delta > 0 :
+		z \in [x - \delta,\, x + \delta]
+		\;\Rightarrow\; |f(z) - f(x)| < \varepsilon.
+	\end{equation}
+	If $f$ is continuous at every $x \in \R$, we write $f \in C^0$.
+	Many simple functions are continuous, and continuity is preserved under sums, products, composition, $\max$, and $\min$.
+\end{defn}
+
+\begin{thm}[Lipschitz implies continuity]\label{thm:lip-cont}
+	If $f$ is locally Lipschitz at $x$, then $f$ is continuous at $x$.
+\end{thm}
+\begin{proof}
+	Given $\varepsilon > 0$, choose $\delta = \varepsilon / L$.
+	Then $|z - x| < \delta$ implies $|f(z) - f(x)| \leq L |z - x| < L \delta = \varepsilon$.
+\end{proof}
+
+The converse fails: $f(x) = \sqrt{|x|}$ is continuous everywhere but not Lipschitz on any interval containing the origin (it becomes ``infinitely steep'' as $x \to 0$).
+
+\paragraph{Complexity of Lipschitz optimization}
+
+Lipschitz continuity is the weakest useful regularity condition.
+With it, optimization becomes possible --- but expensive.
+
+\begin{thm}[Complexity for Lipschitz functions]\label{thm:lip-complexity}
+	Let $f$ be $L$-Lipschitz on a bounded interval $[x_-, x_+]$ with diameter $D = x_+ - x_-$.
+	A uniform sampling strategy --- evaluating $f$ at points spaced at most $2\varepsilon/L$ apart --- finds an $\varepsilon$-optimal solution in
+	\begin{equation}\label{eq:lipschitz-complexity}
+		\mathcal{O}\!\left(\frac{L\cdot D}{\varepsilon}\right)
+	\end{equation}
+	function evaluations.
+	No algorithm can guarantee a better worst-case rate for the class of all $L$-Lipschitz functions \cite{hansen1995}.
+\end{thm}
+
+The bound scales as $1/\varepsilon$: each extra digit of accuracy costs ten times more evaluations.
+Beyond $\varepsilon \approx 10^{-3}$ or $10^{-4}$, this becomes impractical.
+And in higher dimensions, the situation is dramatically worse (we will see why in \Cref{sec:smooth-methods}).
+
+Two practical complications make things harder still.
+First, $L$ is typically unknown and hard to estimate --- yet algorithms need it.
+Second, a method that works well for one class of functions may fail on another: the \textit{no free lunch theorem} \cite{serafino2014} says that, averaged over all possible objectives, every algorithm performs equally badly.
+These limitations motivate the gradient-based methods of the next sections, which exploit differentiability to achieve rates like $\mathcal{O}(\log(1/\varepsilon))$.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Local Optimality}\label{ssec:local-opt}
+
+Even if we stumble onto $x^*$, how do we \emph{recognize} it?
+Verifying global optimality requires knowing $f^*$, which is the very thing we are trying to compute.
+A weaker but tractable condition: local optimality.
+
+\begin{defn}[Local minimum]\label{def:local-min}
+	A point $x^*$ is a \textit{local minimum} of $f$ if there exists $\varepsilon > 0$ such that $f(x^*) \leq f(x)$ for all $x \in [x^* - \varepsilon,\, x^* + \varepsilon]$.
+	A \textit{strict} local minimum additionally requires $f(x^*) < f(z)$ for all $z$ in that neighborhood other than $x^*$ itself.
+\end{defn}
+
+\begin{defn}[Strictly unimodal function]\label{def:unimodal}
+	A function is \textit{strictly unimodal} on an interval $[x_-, x_+]$ if it has a unique minimum $x_*$ and is strictly decreasing on $[x_-, x_*]$ and strictly increasing on $[x_*, x_+]$.
+\end{defn}
+
+Most functions are not unimodal globally.
+But near any local minimum $x^*$, a typical $C^1$ function \emph{is} unimodal within some neighborhood --- the \textit{attraction basin} of $x^*$.
+Every local optimum has its own basin, and once we land inside one, finding the minimum is comparatively easy.
+The trouble is that all basins ``look the same'' from the inside: a local method cannot tell whether the local minimum it finds is the global one.
+Finding the right basin is an entirely different --- and much harder --- problem, which we defer to \Cref{ssec:global-opt}.
+
+For now, we focus on finding \emph{some} local minimum efficiently.
+If $f$ is strictly unimodal on $[x_-, x_+]$, placing two test points $x'_-$ and $x'_+$ inside the interval tells us which half contains the minimum:
+if $f(x'_-) \geq f(x'_+)$, then $x^* \in [x'_-, x_+]$;
+if $f(x'_-) \leq f(x'_+)$, then $x^* \in [x_-, x'_+]$ \cite{bazaraa2006}.
+By iterating, we shrink the interval to any desired width $\delta$.
+The question is: where should we place $x'_-$ and $x'_+$?
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Golden Ratio Search}\label{ssec:golden-ratio}
+
+The strategy is to optimize worst-case behavior: shrink the interval as quickly as possible, regardless of which half gets discarded.
+Each iteration drops either $[x_-, x'_-]$ or $[x'_+, x_+]$; since we don't know which, these two segments should be equal.
+This means choosing a ratio $r \in (1/2, 1)$ and placing $x'_- = x_- + (1-r)D$ and $x'_+ = x_- + rD$.
+
+Smaller $r$ gives faster shrinkage, but there is a catch: if $r$ is close to $1/2$, the two test points nearly coincide, and in the next iteration both must be recomputed from scratch.
+To save one evaluation per step, we need the surviving test point to become one of the two new test points.
+This imposes $r : 1 = (1 - r) : r$, i.e., $r^2 = 1 - r$, giving
+\begin{equation}\label{eq:golden-ratio}
+	r = \frac{\sqrt{5} - 1}{2} \approx 0.618,
+\end{equation}
+the reciprocal of the golden ratio $g = (1 + \sqrt{5})/2 \approx 1.618$.
+
+\begin{algorithm}
+	\caption{Golden Ratio Search (GRS)}
+	\label{alg:GRS}
+	\begin{algorithmic}[1]
+		\Require Function $f$, interval $[x_-, x_+]$, precision $\delta$
+		\Ensure Approximate minimizer of $f$ in $[x_-, x_+]$
+		\Procedure{GRS}{$f, x_-, x_+, \delta$}
+			\State $(x'_-, x'_+) \gets (x_- + (1-r)(x_+ - x_-),\; x_- + r(x_+ - x_-))$
+			\While{$x_+ - x_- > \delta$}
+				\If{$f(x'_-) > f(x'_+)$}
+					\State $(x_-, x'_-, x'_+) \gets (x'_-, x'_+, x_- + r(x_+ - x_-))$
+				\Else
+					\State $(x_+, x'_+, x'_-) \gets (x'_+, x'_-, x_- + (1-r)(x_+ - x_-))$
+				\EndIf
+			\EndWhile
+		\EndProcedure
+	\end{algorithmic}
+\end{algorithm}
+
+After $k$ iterations the interval has width $D r^k$, so the method stops when $k \approx 4.78 \log(D / \delta)$ --- exponentially fast in $\delta$, a huge improvement over the $\mathcal{O}(1/\varepsilon)$ of Lipschitz sampling.
+With naive bisection ($r = 0.5$) and two evaluations per step, the constant would be $\approx 6.64$ instead of $4.78$.
+Golden ratio search is asymptotically optimal among methods using only function values \cite{bazaraa2006}; a slightly better finite-$k$ variant uses Fibonacci numbers.
+
+Note that $\delta$ and $\varepsilon$ are different: $\delta$ controls the interval width, not the gap $A(x)$.
+If $f$ is $L$-Lipschitz, then $A(x^k) \leq L\delta$, so reaching $A \leq \varepsilon$ requires $k \approx 4.78 \log(LD / \varepsilon)$.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Derivatives and First-Order Models}\label{ssec:derivatives}
+
+Golden ratio search uses only function values.
+Can we do better if we also know \emph{in which direction} $f$ is decreasing?
+For a linear function $f(x) = bx$, the sign of $b$ immediately tells us: left if $b > 0$, right if $b < 0$.
+For a general nonlinear $f$, the derivative plays the same role locally.
+
+\begin{defn}[Derivative and first-order model]\label{def:derivative}
+	The \textit{derivative} of $f$ at $x$ is $f'(x) = \lim_{t \to 0} [f(x + t) - f(x)] / t$, provided the limit exists and is finite.
+	When it does, the \textit{first-order model} $L_x(z) = f(x) + f'(x)(z - x)$ is the best linear approximation of $f$ near $x$.
+	The sign of $f'(x)$ tells the local direction of decrease: $f'(x) < 0$ means $f$ is locally decreasing, $f'(x) > 0$ means increasing.
+\end{defn}
+
+If the left limit $f'_-(x) = \lim_{t \to 0^-}$ and right limit $f'_+(x) = \lim_{t \to 0^+}$ both exist but differ, $f$ is not differentiable at $x$.
+The standard example: $f(x) = |x| = \max\{x, -x\}$, where $f'_-(0) = -1$ and $f'_+(0) = +1$.
+Nondifferentiable functions arise naturally in practice ($\ell_1$-regularization, hinge loss); we deal with them in \Cref{sec:nonsmooth}.
+
+Differentiability implies continuity (but not vice versa).
+Derivatives of standard functions are known: $[x^k]' = kx^{k-1}$, $[e^x]' = e^x$, $[\ln x]' = 1/x$, $[\sin x]' = \cos x$, $[\cos x]' = -\sin x$.
+The standard rules preserve differentiability:
+$[\alpha f + \beta g]' = \alpha f' + \beta g'$ (linearity),
+$[f \cdot g]' = f'g + fg'$ (product),
+$[f/g]' = (f'g - fg')/g^2$ (quotient),
+$[f(g(\cdot))]' = f'(g(\cdot)) \cdot g'$ (chain rule).
+Two important operations that do \emph{not} preserve differentiability: $\max\{f, g\}$ and $\min\{f, g\}$.
+In practice, automatic differentiation \cite{nocedal2006} computes derivatives efficiently, so computing them is not our bottleneck.
+
+\paragraph{Regularity classes}
+
+We write $f \in C^k$ when $f$ has $k$ continuous derivatives.
+The hierarchy matters for optimization:
+$f \in C^1$ means $f'$ is continuous, which implies $f$ is Lipschitz on every bounded interval (by the extreme value theorem applied to $|f'|$).
+$f \in C^2$ means $f''$ exists and is continuous, giving us curvature information.
+The best case for univariate optimization is $f \in C^3$: both $f$ and $f'$ are Lipschitz, and we get quadratic convergence from Newton's method.
+
+\paragraph{Local optimality and derivatives}
+
+The connection is immediate.
+If $f'(x) \neq 0$, then $f$ is either increasing or decreasing at $x$, so $x$ cannot be a local minimum.
+Therefore $f'(x^*) = 0$ at every local minimum --- a \textit{necessary} condition.
+But $f'(x) = 0$ also holds at maxima and saddle points (inflection points with zero slope).
+To distinguish them, we need the second derivative: $f''(x^*) > 0$ confirms a local minimum, $f''(x^*) < 0$ a local maximum, and $f''(x^*) = 0$ is inconclusive.
+Finding local minima therefore reduces to finding roots of $f'$ --- and checking the sign of $f''$.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Dichotomic Search}\label{ssec:dichotomic}
+
+When derivative information is available, we can find a root of $f'$ by bisection on its sign.
+The intermediate value theorem guarantees: if $f' \in C^0$ with $f'(x_-) < 0$ and $f'(x_+) > 0$, then $\exists\, x \in [x_-, x_+]$ with $f'(x) = 0$.
+
+\begin{algorithm}
+	\caption{Dichotomic Search (DS)}
+	\begin{algorithmic}[1]
+		\Procedure{DS}{$f, x_-, x_+, \varepsilon$}
+			\Repeat
+				\State $x \gets (x_- + x_+) / 2$
+				\If{$|f'(x)| \leq \varepsilon$} \Return $x$ \EndIf
+				\If{$f'(x) < 0$}
+					\State $x_- \gets x$ \Comment{Minimum is to the right}
+				\Else
+					\State $x_+ \gets x$ \Comment{Minimum is to the left}
+				\EndIf
+			\Until{$x_+ - x_- \leq \delta$}
+		\EndProcedure
+	\end{algorithmic}
+\end{algorithm}
+
+Each step halves the interval, giving linear convergence with $r = 0.5$.
+The complexity is $k \approx 3.32 \log(D / \delta)$ --- fewer iterations than golden ratio search ($4.78$), though each iteration now requires a derivative evaluation instead of a function evaluation.
+If $f'$ is $L$-Lipschitz (i.e., $f$ is $L$-smooth), the stopping criterion $|f'(x)| \leq \varepsilon$ relates to the interval width via $k \approx 3.32 \log(LD / (2\varepsilon))$.
+
+\paragraph{Finding the initial interval}
+
+What if we don't start with $f'(x_-) < 0 < f'(x_+)$?
+A simple strategy: \textit{exponential expansion}.
+Starting from a point with $f'(x_+) < 0$, double the step until the sign flips.
+
+\begin{algorithm}
+	\caption{Exponential Interval Expansion}
+	\begin{algorithmic}[1]
+		\State $\Delta x \gets 1$
+		\While{$f'(x_+) \leq -\varepsilon$}
+			\State $x_+ \gets x_+ + \Delta x$
+			\State $\Delta x \gets 2\, \Delta x$ \Comment{Double the step}
+		\EndWhile
+	\end{algorithmic}
+\end{algorithm}
+
+If $f$ is unbounded below, the expansion never terminates --- a useful diagnostic.
+If $f$ is coercive ($f(x) \to \infty$ as $|x| \to \infty$), it always finds a valid bracket.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Quadratic Interpolation}\label{ssec:quad-interpolation}
+
+Plain bisection picks the midpoint, ignoring the \emph{magnitude} of $f'$ at the endpoints.
+A better guess: fit a quadratic model $ax^2 + bx + c$ to the derivative information at $x_-$ and $x_+$, and use its minimum as the next iterate.
+
+Matching $f'(x_-)$ and $f'(x_+)$ gives
+\begin{equation}\label{eq:quad-interp-coefficients}
+	a = \frac{f'(x_+) - f'(x_-)}{2(x_+ - x_-)},
+	\qquad
+	b = \frac{x_+ f'(x_-) - x_- f'(x_+)}{x_+ - x_-}.
+\end{equation}
+Setting $2ax + b = 0$ yields the interpolated estimate (the ``secant formula''):
+\begin{equation}\label{eq:secant-formula}
+	x = \frac{x_- f'(x_+) - x_+ f'(x_-)}{f'(x_+) - f'(x_-)}.
+\end{equation}
+This always falls between $x_-$ and $x_+$, but it can land dangerously close to an endpoint when one derivative is much larger than the other --- a case where the quadratic model is ``very skewed.''
+
+The general lesson: \emph{never blindly trust a model}.
+A safeguard clamps the estimate away from the boundaries:
+\begin{equation}\label{eq:safeguard-clamping}
+	x \gets \max\bigl\{x_- + \sigma(x_+ - x_-),\; \min(x_+ - \sigma(x_+ - x_-),\, x)\bigr\},
+	\qquad \sigma \in (0, 0.5].
+\end{equation}
+In the worst case (model completely wrong), this degrades to linear convergence with $r = 1 - \sigma$.
+When the model is good, convergence is superlinear.
+
+\begin{thm}[Superlinear convergence of quadratic interpolation]\label{thm:secant-conv}
+	If $f \in C^3$ with $f'(x^*) = 0$ and $f''(x^*) \neq 0$, then safeguarded quadratic interpolation converges with order $p = (1 + \sqrt{5})/2 \approx 1.618$ --- the golden ratio again --- provided the initial guess is close enough to $x^*$ \cite{sun2006}.
+\end{thm}
+
+Cubic interpolation, which uses all four pieces of information ($f$ and $f'$ at both endpoints), achieves quadratic convergence ($p = 2$) under the same hypotheses \cite{sun2006,nocedal2006}.
+It is more complex to implement but often worthwhile in practice.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Newton's Method}\label{ssec:newton-univariate}
+
+Newton's method pushes the approximation idea to its limit: instead of modelling $f$ linearly, it uses a \emph{quadratic} model, exploiting the second derivative.
+Two equivalent views lead to the same update.
+
+\textbf{View 1:} build a first-order model of $f'$ at $x^k$ and solve for its root.
+\begin{equation}\label{eq:newton-view1}
+	L'_k(x) = f'(x^k) + f''(x^k)(x - x^k) = 0
+	\qquad \Longrightarrow \qquad
+	x^{k+1} = x^k - \frac{f'(x^k)}{f''(x^k)}.
+\end{equation}
+
+\textbf{View 2:} build the second-order Taylor model of $f$ at $x^k$ and minimize it.
+\begin{equation}\label{eq:newton-taylor-model}
+	Q_k(x) = f(x^k) + f'(x^k)(x - x^k) + \frac{1}{2} f''(x^k)(x - x^k)^2.
+\end{equation}
+Setting $Q'_k(x) = 0$ yields the same update.
+
+\begin{algorithm}
+	\caption{Newton's Method (NM)}
+	\begin{algorithmic}[1]
+		\Procedure{NM}{$f, x, \varepsilon$}
+			\While{$|f'(x)| > \varepsilon$}
+				\State $x \gets x - f'(x) / f''(x)$
+			\EndWhile
+		\EndProcedure
+	\end{algorithmic}
+\end{algorithm}
+
+\begin{thm}[Quadratic convergence of Newton's method]\label{thm:newton-conv}
+	If $f \in C^3$ near $x^*$ with $f'(x^*) = 0$ and $f''(x^*) \neq 0$, and $x^0$ is sufficiently close to $x^*$, then Newton's method converges quadratically.
+	By Taylor's theorem, there exists $\xi$ between $x^k$ and $x^*$ such that
+	\begin{equation}\label{eq:newton-error}
+		x^{k+1} - x^* = \frac{f'''(\xi)}{2\, f''(x^k)}\, (x^k - x^*)^2.
+	\end{equation}
+	Quadratic convergence means the number of correct digits roughly doubles at each step --- spectacular speed, but only when the initial guess is good enough.
+\end{thm}
+
+\begin{proof}
+	Write $x^{k+1} - x^* = (x^k - x^*) - f'(x^k)/f''(x^k)$.
+	Substituting $f'(x^*) = 0$ and applying Taylor's formula to $f'$ around $x^k$:
+	$f'(x^*) - f'(x^k) - f''(x^k)(x^* - x^k) = \frac{1}{2} f'''(\xi)(x^* - x^k)^2$
+	for some $\xi$ between $x^k$ and $x^*$.
+	Dividing by $f''(x^k)$ gives the result.
+	Since $f \in C^3$ and $f''(x^*) \neq 0$, there exists a neighborhood where $|f''(x)| \geq k_2 > 0$ and $|f'''(x)| \leq k_1 < \infty$.
+	If $k_1 |x^k - x^*| / (2 k_2) < 1$, then $|x^{k+1} - x^*| < |x^k - x^*|$, and convergence follows by induction.
+\end{proof}
+
+Newton's method converges fast only locally.
+Without a good starting point, it can diverge, oscillate, or converge to a maximum.
+Global convergence requires safeguards (line search, trust region) --- topics we develop in the multivariate setting (\Cref{sec:smooth-methods}).
+And $f''(x^k) = 0$ is trouble: the method is undefined, signaling a flat second-order model.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Global Optimization}\label{ssec:global-opt}
+
+Local methods find local minima efficiently.
+But what if the problem has many local minima and we need the best one?
+Unless the objective has special structure, this is a fundamentally harder question.
+
+\paragraph{Convexity: when local equals global}
+
+\begin{thm}[Convexity and global optimality]\label{thm:convex-global}
+	If $f$ is convex --- meaning $f''(x) \geq 0$ everywhere, or more generally $f(\alpha x + (1-\alpha)z) \leq \alpha f(x) + (1-\alpha) f(z)$ for all $x, z$ and $\alpha \in [0,1]$ --- then every local minimum is automatically a global minimum.
+	Convexity ensures that $f'$ is nondecreasing, ruling out multiple stationary points (except along a flat segment).
+\end{thm}
+
+Convexity is the single most important structural assumption in optimization.
+When it holds, local methods are already global --- we get the best of both worlds.
+Many models are purposely constructed to be convex (SVM, ridge regression) precisely so that optimization is tractable.
+``If you have the choice, choose convex'' \cite{boyd2008}.
+We study convexity thoroughly in \Cref{sec:optimality}.
+
+\paragraph{Spatial branch-and-bound}
+
+When convexity doesn't hold and the global optimum is genuinely needed, the standard approach is \textit{spatial branch-and-bound}.
+The idea: construct a convex lower approximation $\underline{f}(x) \leq f(x)$ on a bounded domain $X = [x_-, x_+]$, and solve $\min_x \underline{f}(x)$ to get a lower bound on $f^*$.
+
+When the gap between the lower bound $\underline{f}(\bar{x})$ and the best known function value is too large, the domain is split into subregions.
+Each subregion gets its own convex relaxation.
+Subregions whose lower bound exceeds the best known value are \textit{pruned} --- they cannot contain the global minimum.
+
+The method's efficiency hinges on the quality of $\underline{f}$.
+A tight relaxation means aggressive pruning and fast convergence; a loose one means exploring many subregions.
+Worst-case complexity is exponential --- keep dicing the domain until the pieces are tiny --- but practical performance depends on the degree of nonconvexity and the quality of the relaxation.
+
+For Mixed-Integer Linear Programs, the branch-and-bound framework is especially effective: everything is ``trivial'' once the integer variables are fixed or relaxed.
+Mixed-Integer Nonlinear Convex Programs are harder but still tractable.
+General nonlinear nonconvex problems require additional machinery --- function transformations, convexification techniques --- typically implemented in specialized solvers.
+These methods are immensely more efficient than blind search, yet immensely less efficient than local optimization.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Summary: Regularity and Speed}\label{ssec:univariate-summary}
+
+The univariate methods form a hierarchy, each trading a stronger assumption for a faster rate:
+
+\begin{table}[ht]
+	\centering
+	\begin{tabular}{llll}
+		\toprule
+		Method & Information used & Assumption & Complexity \\
+		\midrule
+		Uniform sampling & $f(x)$ only   & $L$-Lipschitz & $\mathcal{O}(LD/\varepsilon)$ \\
+		Golden ratio     & $f(x)$ only   & unimodal      & $\mathcal{O}(\log(D/\delta))$ \\
+		Dichotomic       & $f(x), f'(x)$ & $f \in C^1$, unimodal & $\mathcal{O}(\log(D/\delta))$ (faster constant) \\
+		Quad.\ interpolation & $f'(x_\pm)$ & $f \in C^3$   & superlinear ($p \approx 1.618$) \\
+		Newton           & $f'(x), f''(x)$ & $f \in C^3$ & quadratic ($p = 2$) \\
+		\bottomrule
+	\end{tabular}
+	\caption{Univariate optimization methods: assumptions vs.\ speed.}
+	\label{tab:univariate-methods}
+\end{table}
+
+These ideas --- models, line search, trust regions, regularity-dependent rates --- will reappear in every multivariate method.
+But first, we need the multivariate calculus: gradients, Hessians, and the optimality conditions that generalize $f'(x^*) = 0$ and $f''(x^*) \geq 0$ to $\R^n$.

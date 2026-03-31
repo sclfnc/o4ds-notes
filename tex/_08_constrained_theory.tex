@@ -1,0 +1,322 @@
+% ================================================================
+%  §8  Constrained Optimality and Duality
+% ================================================================
+\section{Constrained Optimality and Duality}\label{sec:constrained-theory}
+
+Unconstrained optimization asks for stationary points: $\nabla f(x) = 0$.
+Add constraints and this simple condition breaks --- a minimizer can sit on the boundary of the feasible region with $\nabla f(x) \neq 0$.
+This section develops the theory needed to characterize constrained optima: tangent cones, the KKT conditions, Lagrangian duality, and specialized dual forms for structured problems.
+It ends with two major applications of the theory: proximal bundle methods for Lagrangian duals, and the kernel trick for support vector machines.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Problem Formulation}\label{ssec:constrained-formulation}
+
+\begin{defn}[Constrained optimization problem]\label{def:constrained-P}
+	$(P) \quad f^* = \min\{f(x) : x \in X\}$,
+	where $f \colon \R^n \to \R$ is the objective and $X \subseteq \R^n$ the feasible region.
+\end{defn}
+
+\begin{defn}[Indicator function]\label{def:indicator}
+	$\mathbb{I}_X(x) = 0$ if $x \in X$, $+\infty$ otherwise.
+	This is convex iff $X$ is convex.
+	Using it, $(P)$ becomes $\min\{f(x) + \mathbb{I}_X(x)\}$ --- the \textit{essential objective}.
+	But $\mathbb{I}_X \notin C^0$, making the problem harder.
+\end{defn}
+
+It is sometimes useful to hide constraints in the objective: the \textit{epigraph reformulation} $(P) \equiv \min\{v : v \geq f(x),\, x \in X\}$ turns a nonlinear objective into a linear one at the cost of an extra variable and a nonlinear constraint.
+If $X = \emptyset$, the problem is infeasible and $\nu(P) = +\infty$.
+
+\begin{defn}[Interior, boundary, local optimum]\label{def:interior-boundary}
+	$x \in \mathrm{int}(X)$ if $\exists\, r > 0 : \mathcal{B}(x, r) \subseteq X$.
+	$x \in \partial X$ if every ball around $x$ contains points both inside and outside $X$.
+	If $x^* \in \mathrm{int}(X)$ and $x^*$ is a local minimum, then $\nabla f(x^*) = 0$ --- the unconstrained condition still holds.
+	If $x^* \in \partial X$, this need not be true: the constraint ``pushes'' the optimum to the boundary.
+\end{defn}
+
+\begin{defn}[Open, closed, full-dimensional sets]\label{def:set-classes}
+	$S$ is \textit{open} if $S = \mathrm{int}(S)$; \textit{closed} if it contains all its limit points ($x_i \to x$, $x_i \in S \Rightarrow x \in S$); \textit{full-dimensional} if $\mathrm{int}(S) \neq \emptyset$.
+	Finite intersections of open sets are open; finite unions of closed sets are closed.
+\end{defn}
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Tangent Cone and First-Order Geometric Conditions}\label{ssec:tangent-cone}
+
+The key question: at a boundary point $x$, which directions lead into $X$?
+The answer is the tangent cone --- obtained by ``zooming in'' on $x$ until the set looks like a cone.
+
+\begin{defn}[Tangent cone]\label{def:tangent-cone}
+	$T_X(x) = \{d \in \R^n : \exists\, \{z_i \in X\} \to x,\; \{t_i\} \to 0,\; t_i > 0 : (z_i - x)/t_i \to d\}$.
+\end{defn}
+
+\begin{defn}[Tangent cone condition (TCC)]\label{def:tcc}
+	$\inner{\nabla f(x), d} \geq 0$ for all $d \in T_X(x)$.
+\end{defn}
+
+\begin{thm}[TCC is necessary for local optimality]\label{thm:tcc-necessary}
+	If $x$ is a local optimum of $(P)$, then TCC holds.
+\end{thm}
+\begin{proof}
+	By contradiction.
+	Suppose $\exists\, d \in T_X(x)$ with $\inner{\nabla f(x), d} < 0$.
+	By definition of $T_X$, $\exists\, \{z_i\} \to x$ in $X$ and $\{t_i\} \to 0$ with $(z_i - x)/t_i \to d$.
+	Taylor expansion: $f(z_i) - f(x) = \inner{\nabla f(x), z_i - x} + R(z_i - x)$ where $R(h)/\norm{h} \to 0$.
+	Since $z_i - x \approx t_i d$, we get $\inner{\nabla f(x), z_i - x} \approx t_i \inner{\nabla f(x), d} < 0$.
+	The remainder vanishes faster, so $f(z_i) < f(x)$ for large $i$ --- contradicting local optimality since $z_i \in X \cap \mathcal{B}(x, \varepsilon)$.
+\end{proof}
+
+If $X$ is convex, TCC is also \textit{sufficient} for global optimality (since $X \subseteq x + T_X(x)$).
+At an interior point, $T_X(x) = \R^n$, so TCC reduces to $\nabla f(x) = 0$.
+
+TCC generalizes the notion of stationary point to constrained problems: it is necessary for optimality and the only condition we can reasonably check in practice.
+But expressing $T_X(x)$ explicitly requires knowing $X$ algebraically.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Convexity of Sets}\label{ssec:convex-sets}
+
+\begin{defn}[Convex set]\label{def:convex-set}
+	A set $C$ is convex if $\alpha x + (1-\alpha)z \in C$ for all $x, z \in C$ and $\alpha \in [0,1]$.
+	The \textit{convex hull} $\conv(S)$ is the smallest convex set containing $S$; $C$ is convex iff $C = \conv(C)$.
+\end{defn}
+
+Basic convex sets: polytopes (convex hull of finitely many points), affine sets (hyperplanes $\{x : \inner{a, x} = b\}$), half-spaces ($\{x : \inner{a, x} \leq b\}$), ellipsoids ($\{z : (z-x)^T Q (z-x) \leq r\}$ with $Q \succeq 0$), and $p$-norm balls $\mathcal{B}_p(x, r)$.
+
+Convex cones: the conical hull $\Cone(d_1, \dots, d_k) = \{\sum_i \mu_i d_i : \mu_i \geq 0\}$ is polyhedral.
+The Lorentz (ice-cream) cone $\mathcal{L} = \{x : x_n \geq \sqrt{\sum_{i<n} x_i^2}\}$ and the positive semidefinite cone $S^+ = \{Q : Q \succeq 0\}$ are important non-polyhedral examples.
+
+\paragraph{Convexity-preserving operations on sets}
+
+Finite intersection; image and pre-image under affine maps; Minkowski sum; slices and shadows of convex sets in higher dimensions; interior and closure of a convex set.
+These rules allow building complex feasible regions from simple convex pieces.
+
+\paragraph{Convex sets from convex functions}
+
+If all $g_i$ are convex, the sublevel sets $\{x : g_i(x) \leq 0\}$ are convex.
+But $\{x : g_i(x) \geq 0\}$ is typically non-convex (``reverse convex'').
+Equality constraints $g_i(x) = 0$ yield convex sets only when $g_i$ is affine.
+So for $X$ to be convex: all inequality constraints must be convex, and all equality constraints must be affine.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Feasible Directions and Algebraic Formulation}\label{ssec:feasible-directions}
+
+\begin{defn}[Feasible direction cone]\label{def:feasible-dir}
+	$F_X(x) = \{d : \exists\, \bar{\varepsilon} > 0,\; x + \varepsilon d \in X\;\forall\, \varepsilon \in [0, \bar{\varepsilon}]\}$.
+	If $X$ is convex, $F_X(x) \subseteq T_X(x)$ and they essentially agree (same closure), so $X \subseteq x + T_X(x)$.
+\end{defn}
+
+\begin{defn}[Algebraic form]\label{def:algebraic}
+	With inequality constraints $g_i$ and equality constraints $h_j$:
+	$X = \{x : g_i(x) \leq 0,\, i \in I;\; h_j(x) = 0,\, j \in J\}$.
+\end{defn}
+
+Reformulations are possible (equalities as pairs of inequalities, multiple inequalities as a single $\max$), but they often destroy structure.
+A cautionary example: $\max\{g_1, g_2\} \notin C^1$ even if $g_1, g_2 \in C^1$.
+
+\paragraph{Linear constraints and polyhedra}
+
+Linear constraints $g_i(x) = \inner{A_i, x} + b_i \leq 0$ define half-spaces; their intersection is a \textit{polyhedron}.
+$k$ equalities $Ax = b$ define an affine subspace of dimension at most $n - k$.
+Polyhedra are tractable: optimizing a linear function over one is solvable in polynomial time.
+
+For $(P)\; \min\{f(x) : Ax = b\}$: every $x \in X$ lies on the boundary, and feasible directions satisfy $Ad = 0$.
+TCC forces $\nabla f(x) \perp \ker(A)$, i.e., $\nabla f(x) \in \im(A^T)$.
+This gives the \textit{Poorman's KKT}: $x$ is optimal iff $Ax = b$ and $\exists\, \mu : \nabla f(x) = A^T \mu$ \cite{luenberger2008}.
+
+The \textit{reduced problem} eliminates the equality constraints: partition $A = [A_B \mid A_N]$ with $A_B$ invertible, set $x_B = A_B^{-1}(b - A_N x_N)$, and optimize over $x_N$ alone.
+The reduced gradient $\nabla r(x_N) = D^T \nabla f(Dx_N + d)$ recovers the KKT conditions at its zero.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Nonlinear Constraints and KKT}\label{ssec:kkt}
+
+\begin{defn}[Active constraints and first-order feasible direction cone]\label{def:active-dx}
+	$\mathcal{A}(x) = \{i \in I : g_i(x) = 0\}$ are the active constraints.
+	$D_X(x) = \{d : \inner{\nabla g_i(x), d} \leq 0\;\forall\, i \in \mathcal{A}(x);\; \inner{\nabla h_j(x), d} = 0\;\forall\, j\}$.
+	Always $D_X(x) \supseteq T_X(x)$, but the inclusion can be strict.
+\end{defn}
+
+\textit{Constraint qualifications} are conditions under which $T_X(x) = D_X(x)$:
+\begin{itemize}
+	\item \textit{Affine constraints (AffC):} all $g_i, h_j$ affine $\Rightarrow$ always holds.
+	\item \textit{Slater's condition (SlaC):} $g_i$ convex, $h_j$ affine, $\exists\, \bar{x} : g_i(\bar{x}) < 0\;\forall\, i$.
+	\item \textit{Linear independence (LinI):} gradients of active constraints at $\bar{x}$ are linearly independent.
+\end{itemize}
+
+\begin{defn}[Dual cone and Farkas' lemma]\label{def:farkas}
+	For a polyhedral cone $C = \{d : Ad \leq 0\}$, its dual cone is $C^* = \{\sum_i \lambda_i A_i : \lambda_i \geq 0\}$.
+	\textit{Farkas' lemma:} for any $c \in \R^n$, exactly one holds: (1) $\exists\, \lambda \geq 0$ with $c = \sum_i \lambda_i A_i$, or (2) $\exists\, d$ with $Ad \leq 0$ and $\inner{c, d} > 0$.
+	Equivalently, $C^\circ = C^*$ (polar equals dual) \cite{bazaraa2006}.
+\end{defn}
+
+\begin{thm}[Karush--Kuhn--Tucker conditions]\label{thm:kkt}
+	If a constraint qualification holds and $x^*$ is a local optimum, then $\exists\, \lambda \in \R_+^{|I|}$, $\mu \in \R^{|J|}$ such that:
+	\begin{itemize}
+		\item $g_i(x^*) \leq 0\;\forall\, i$, $h_j(x^*) = 0\;\forall\, j$ \hfill\textit{(KKT-F: feasibility)}
+		\item $\nabla f(x^*) + \sum_i \lambda_i \nabla g_i(x^*) + \sum_j \mu_j \nabla h_j(x^*) = 0$ \hfill\textit{(KKT-G: stationarity)}
+		\item $\lambda_i g_i(x^*) = 0\;\forall\, i$ \hfill\textit{(KKT-CS: complementary slackness)}
+	\end{itemize}
+\end{thm}
+
+Two caveats.
+KKT can hold at saddle points or maxima of non-convex problems.
+And without constraint qualifications, KKT may fail even at the optimum.
+The safe case: $f$ convex on $X$ convex ($g_i$ convex, $h_j$ affine), where KKT is necessary and sufficient for global optimality.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Second-Order Conditions}\label{ssec:sosc}
+
+When $(P)$ is not convex, KKT is necessary but not sufficient.
+Second-order conditions fill the gap.
+
+\begin{defn}[Lagrangian and critical cone]\label{def:lagrangian}
+	The \textit{Lagrangian} is $L(x; \lambda, \mu) = f(x) + \sum_i \lambda_i g_i(x) + \sum_j \mu_j h_j(x)$.
+	At a KKT point, $\nabla_x L = 0$.
+	The \textit{critical cone} restricts attention to directions consistent with the active constraints:
+	\begin{equation}\label{eq:critical-cone}
+		C(x; \lambda, \mu) = \{d : \inner{\nabla g_i, d} = 0\;\text{if } \lambda_i > 0;\;
+		\inner{\nabla g_i, d} \leq 0\;\text{if } \lambda_i = 0,\, i \in \mathcal{A};\;
+		\inner{\nabla h_j, d} = 0\;\forall\, j\}.
+	\end{equation}
+\end{defn}
+
+\begin{thm}[Second-order conditions]\label{thm:sosc}
+	Under KKT and linear independence:
+	\begin{itemize}
+		\item \textit{Necessary:} $d^T \nabla^2_x L(x; \lambda, \mu)\, d \geq 0$ for all $d \in C(x; \lambda, \mu)$.
+		\item \textit{Sufficient:} strict inequality for all nonzero $d \in C$ implies $x$ is a strict local minimum.
+	\end{itemize}
+\end{thm}
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Lagrangian Duality}\label{ssec:duality}
+
+KKT stationarity says $x$ is stationary for $L(\cdot; \lambda, \mu)$ at the right multipliers.
+If we knew $\lambda, \mu$, we could find $x$ by solving an unconstrained problem.
+This idea drives duality.
+
+\begin{defn}[Lagrangian relaxation and dual function]\label{def:lag-relax}
+	$\psi(\lambda, \mu) = \min_{x} L(x; \lambda, \mu)$.
+	For any $\lambda \geq 0$ and any $\mu$: $\psi(\lambda, \mu) \leq \nu(P)$ (\textit{weak duality}).
+	$\psi$ is concave (even if $f, g_i, h_j$ are not convex), possibly $-\infty$, and often easy to compute.
+	If the minimizer $\bar{x}$ of $L$ is unique, $\psi$ is differentiable with $\nabla\psi = [G(\bar{x}), H(\bar{x})]$.
+	Otherwise $\psi$ may be nonsmooth --- the methods of \Cref{sec:nonsmooth} apply directly.
+\end{defn}
+
+\begin{defn}[Lagrangian dual]\label{def:lag-dual}
+	$(D) \quad \max\{\psi(\lambda, \mu) : \lambda \geq 0,\, \mu \in \R^{|J|}\}$.
+	This is a convex program (even if $(P)$ is not), providing a lower bound $\nu(D) \leq \nu(P)$.
+\end{defn}
+
+\begin{defn}[Strong duality]\label{def:strong-dual}
+	If $\nu(D) = \nu(P)$, we have \textit{strong duality}: the bound is tight and the dual solution recovers all the information of the primal.
+\end{defn}
+
+Strong duality does not always hold.
+A simple counterexample: $\min\{-x^2 : 0 \leq x \leq 1\}$ has $\nu(P) = -1$, but $\psi(\lambda) = -\infty$ for all $\lambda \geq 0$, so $\nu(D) = -\infty$.
+The gap arises because $x^*$ is a maximizer (not minimizer) of $L$ for the KKT multipliers.
+
+\begin{thm}[Strong duality for convex problems]\label{thm:strong-dual-convex}
+	If $(P)$ is convex and a constraint qualification holds, then $\nu(D) = \nu(P)$.
+\end{thm}
+\begin{proof}
+	Since $(P)$ is convex with a CQ, KKT conditions hold at $x^*$: $\exists\, \lambda^* \geq 0$, $\mu^*$ satisfying stationarity ($\nabla_x L(x^*; \lambda^*, \mu^*) = 0$) and complementary slackness ($\lambda_i^* g_i(x^*) = 0$ for all $i$).
+	By stationarity, $x^*$ minimizes $L(\cdot; \lambda^*, \mu^*)$ over $\R^n$ (the Lagrangian is convex in $x$).
+	Therefore $\psi(\lambda^*, \mu^*) = L(x^*; \lambda^*, \mu^*)$.
+	Expanding: $L(x^*; \lambda^*, \mu^*) = f(x^*) + \sum_i \lambda_i^* g_i(x^*) + \sum_j \mu_j^* h_j(x^*)$.
+	By feasibility $h_j(x^*) = 0$, and by complementary slackness $\lambda_i^* g_i(x^*) = 0$.
+	So $\psi(\lambda^*, \mu^*) = f(x^*) = \nu(P)$.
+	Since $\psi(\lambda^*, \mu^*) \leq \nu(D) \leq \nu(P)$ (weak duality), equality follows.
+\end{proof}
+
+\paragraph{Economic interpretation}
+
+The optimal multiplier $\lambda_i^*$ measures the \textit{sensitivity} of $f^*$ to a relaxation of constraint $i$: loosening $g_i(x) \leq 0$ to $g_i(x) \leq \varepsilon$ changes $f^*$ by approximately $-\lambda_i^* \varepsilon$.
+Active constraints with large $\lambda_i^*$ are ``expensive'' --- removing them would significantly improve the objective.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Specialized Duals}\label{ssec:specialized-duals}
+
+\paragraph{Linear programming}
+
+For $(P)\; \min\{c^T x : Ax \geq b\}$: the dual is $(D)\; \max\{\lambda^T b : A^T\lambda = c,\, \lambda \geq 0\}$.
+Strong duality holds almost always for LPs.
+
+\paragraph{Quadratic programming --- equality constraints}
+
+For $(P)\; \min\{\frac{1}{2}\norm{x}^2 : Ax = b\}$: $\psi(\mu) = -\frac{1}{2}\mu^T AA^T\mu - \mu^T b$, unconstrained in $\mu$.
+
+\paragraph{Strictly convex QP}
+
+For $(P)\; \min\{\frac{1}{2}x^T Qx + q^T x : Ax \geq b\}$ with $Q \succ 0$:
+$(D)\; \max\{\lambda^T b - \frac{1}{2}v^T Q^{-1}v : \lambda^T A - v = q^T,\, \lambda \geq 0\}$.
+Strong duality holds.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Conic Programs}\label{ssec:conic}
+
+\begin{defn}[Conic program]\label{def:conic}
+	Given a pointed convex cone $K$:
+	$(P)\; \min\{c^T x : Ax \geq_K b\}$ where $x \geq_K y \Leftrightarrow x - y \in K$.
+	Important cones: $K = \R_+^n$ (LP), $K = S^+$ (SDP), $K = \mathcal{Q}$ the second-order cone (SOCP).
+	Every LP and convex QP is an SOCP; every SOCP is an SDP --- but not vice versa.
+\end{defn}
+
+\begin{defn}[Conic dual]\label{def:conic-dual}
+	With dual cone $K_D = \{z : \inner{z, v} \geq 0\;\forall\, v \in K\}$ (self-dual for $\R_+^n$, $S^+$, $\mathcal{Q}$):
+	$(D)\; \max\{\lambda^T b : \lambda^T A = c^T,\, \lambda \geq_{K_D} 0\}$.
+	Strong duality requires a Slater-type constraint qualification.
+\end{defn}
+
+SOCP explicit form: $\min\{c^T x : \norm{D_i x - d_i} \leq p_i^T x - q_i,\; i = 1, \dots, m\}$.
+
+SDP explicit form: $\min\{c^T x : \sum_i x_i A^i \succeq B\}$ with dual $\max\{\inner{B, \Lambda} : \inner{A^i, \Lambda} = c_i,\, \Lambda \succeq 0\}$, where $\inner{A, B} = \tr(A^T B)$ is the Frobenius inner product.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Proximal Bundle Method for Lagrangian Duals}\label{ssec:bundle-dual}
+
+When $(D)$ involves a nonsmooth $\psi$, the proximal bundle method from \Cref{ssec:bundle-methods} applies directly.
+The bundle $\mathcal{B} = \{(x^h, f^h, g^h)\}_{h < i}$ builds a cutting-plane model $f_{\mathcal{B}}^i \leq f$.
+
+The stabilized master problem uses the \textit{linearization error} $\alpha^h = f(\bar{x}) - f^h - \inner{g^h, \bar{x} - x^h} \geq 0$.
+The dual master problem is
+\begin{equation}\label{eq:dual-master}
+	\min\Bigl\{\frac{1}{2\mu}\Bigl\|\sum_{h} \theta_h g^h\Bigr\|^2 + \sum_h \alpha^h \theta_h : \theta \geq 0,\, \sum_h \theta_h = 1\Bigr\},
+\end{equation}
+giving $z^* = \sum_h \theta_h^* g^h$ and $d^* = -z^*/\mu$.
+
+Key advantages: the dual master may be faster to solve; elements with $\theta_h^* = 0$ can be pruned; and the entire bundle can be replaced by the aggregate $(z^*, \sigma^*)$ --- a ``poorman's bundle'' that degrades to a subgradient method.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{SVM and SVR: A Duality Application}\label{ssec:svm-duality}
+
+The nonsmooth SVM and SVR formulations from \Cref{ssec:svm-svr} can be reformulated using slack variables and solved via their duals.
+
+Introducing slacks $\xi_i \geq 0$, the SVM primal becomes
+\begin{equation}\label{eq:svm-primal-slack}
+	\min_{w, b, \xi}\Bigl\{\tfrac{1}{2}\norm{w}^2 + C\textstyle\sum_i \xi_i : y^i(\inner{w, x^i} - b) \geq 1 - \xi_i,\; \xi_i \geq 0\Bigr\}.
+\end{equation}
+The dual is a box-constrained QP:
+\begin{equation}\label{eq:svm-dual}
+	\max_\alpha\Bigl\{\textstyle\sum_i \alpha_i - \frac{1}{2}\sum_{i,j} \alpha_i y^i \inner{x^i, x^j} y^j \alpha_j : \sum_i y^i \alpha_i = 0,\; 0 \leq \alpha_i \leq C\Bigr\}.
+\end{equation}
+The primal solution recovers as $w^* = \sum_i \alpha_i^* y^i x^i$; only \textit{support vectors} ($\alpha_i^* > 0$) contribute.
+
+\paragraph{The kernel trick}
+
+In practice, linear separation is often impossible.
+The idea: embed data nonlinearly via $\varphi \colon \R^h \to \mathcal{F}$ into a (possibly infinite-dimensional) feature space where a linear model suffices.
+The dual depends on inner products $\inner{x^i, x^j}$ only, which we replace with a \textit{kernel function} $\kappa(x^i, x^j) = \inner{\varphi(x^i), \varphi(x^j)}$ --- computed without forming $\varphi$ explicitly.
+Prediction for a new $\bar{x}$: $\sum_i \alpha_i^* y^i \kappa(x^i, \bar{x}) - b^*$.
+
+A kernel must be positive semidefinite.
+Standard choices: polynomial $\kappa(x, z) = (\inner{x, z} + 1)^k$; Gaussian $\kappa(x, z) = \exp(-\norm{x-z}^2 / (2\sigma^2))$; sigmoid $\kappa(x, z) = \tanh(\sigma\inner{x, z} + \delta)$.
+SVR with a Gaussian kernel can approximate any continuous function on a bounded domain arbitrarily well, given enough data.

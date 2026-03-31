@@ -1,0 +1,220 @@
+\section{Foundations}\label{sec:foundations}
+
+Every optimization problem asks the same question: among all available choices, which one is best? We start from the simplest possible version of this question and progressively discover why it gets hard. The goal is not just to set up definitions --- it is to understand \emph{where the difficulty lives}, so that the tools developed in later sections are motivated by a genuine need.
+
+\subsection{Optimization Problems}\label{ssec:opt-problems}
+
+\begin{defn}[Univariate function]\label{def:univariate-fn}
+	A function $f \colon \R \to \R$ maps an input $x$ to an output $y = f(x)$.
+	Four sets capture its geometry:
+	\begin{itemize}
+		\item $\Gr(f) = \{(x, f(x)) \mid x \in \R\} \subset \R^2$
+			\hfill\textit{[Graph]}
+		\item $\im(f) = \{y \mid \exists\, x : y = f(x)\} \subset \R$
+			\hfill\textit{[Image]}
+		\item $L(f, v) = \{x \mid f(x) = v\} \subset \R$
+			\hfill\textit{[Level set at value $v$]}
+		\item $L(f, 0) = \{x \mid f(x) = 0\} \subset \R$
+			\hfill\textit{[Roots]}
+	\end{itemize}
+\end{defn}
+
+\begin{defn}[Optimization problem]\label{def:minimization}
+	Given a function $f$ (the \textit{objective}) and a set $X \subseteq \R^n$ (the \textit{feasible region}), the optimization problem is
+	\begin{equation}\label{eq:opt-problem}
+		(P) \quad f^* = \inf\{f(x) : x \in X\}.
+	\end{equation}
+	When the infimum is attained, we write $\min$ instead of $\inf$ and denote any minimizer by $x^* \in \argmin\{f(x) : x \in X\}$.
+	When $X = \R^n$, the problem is \textit{unconstrained}; otherwise it is \textit{constrained}. The optimal value $f^* = \nu(P)$ is unique, but the minimizer $x^*$ need not be. All minimizers share the same objective value, so they are equivalent ``in the eyes of $f$.'' We write $X^* = L(f, f^*) \cap X$ for the \textit{optimal set}, and call any $x \in X$ a \textit{feasible solution} and any $x \notin X$ an \textit{infeasible} one.
+\end{defn}
+
+\begin{defn}[Types of constraints]\label{def:constraint-types}
+	Constraints describing $X$ fall into three families:
+	\begin{itemize}
+		\item $g(x) = v$ \hfill\textit{[Equality --- a level set]}
+		\item $g(x) \leq v$ \hfill\textit{[Inequality --- a sublevel set $S(g, v) = \{x : g(x) \leq v\}$]}
+		\item $g_1(x) \leq 0 \;\land\; \cdots \;\land\; g_k(x) \leq 0$
+			\hfill\textit{[Multiple --- an intersection of sublevel sets]}
+	\end{itemize}
+	A common special case: \textit{box constraints} $x_- \leq x \leq x_+$ with $x_-, x_+ \in \R^n$ and $x_- \leq x_+$ component-wise.
+	If one wants $g(x) \geq 0$ instead, simply rewrite as $-g(x) \leq 0$.
+\end{defn}
+
+These definitions apply to any $f$ and any $X$.
+But having a well-posed problem on paper does not mean we can solve it.
+Before tackling difficulty, we note a few transformations that are always free.
+
+% ---------------------------------------------------------------
+\subsection{Simple Reformulations}\label{ssec:reformulations}
+
+Several transformations change $f^*$ in a predictable way without affecting $X^*$.
+These are \textit{reformulations}: equivalent problems with identical optimal sets.
+
+\begin{itemize}
+	\item \textbf{Min--max duality.}
+		$\min\{f(x) : x \in X\} = -\max\{-f(x) : x \in X\}$,
+		so $\argmin f = \argmax(-f)$.
+		Minimization and maximization are interchangeable (but $\min f \neq \max f$ in general --- often very different problems).
+	\item \textbf{Additive constant.}
+		$\min\{f(x) + c\} = c + \min\{f(x)\}$ for any $c \in \R$, preserving $X^*$.
+	\item \textbf{Positive scaling.}
+		$\min\{c\, f(x)\} = c \min\{f(x)\}$ for $c > 0$, again preserving $X^*$.
+\end{itemize}
+
+We use these freely.
+Throughout the text, ``minimize'' is assumed without loss of generality.
+
+% ---------------------------------------------------------------
+\subsection{When the Optimum Does Not Exist}\label{ssec:unbounded}
+
+Solving $(P)$ actually involves (at least) two distinct tasks: finding $x^*$ and proving it is optimal, or constructively showing that $f$ is unbounded below.
+Both can fail in subtle ways.
+
+\begin{defn}[Function unbounded below]\label{def:unbounded-below}
+	A function $f$ is \textit{unbounded below} if for every $M > 0$ there exists some $x$ with $f(x) < -M$. No finite minimum exists; we write $f^* = -\infty$ as shorthand for ``there is no finite lower bound on $\im(f)$.''
+	This rarely happens in data science (loss functions are typically nonnegative), but it is nontrivial and important in optimization theory, tied to duality and nonemptiness of feasible sets.
+\end{defn}
+
+Even when $f^*$ is finite, a minimizer may fail to exist. Consider $f(x) = e^x$: the infimum is $0$, but no $x$ achieves it --- $\im(f) = (0, +\infty)$ is bounded below yet has no minimum. Another example: $f(x) = |x|$ for $x \neq 0$ and $f(0) = 1$; the infimum is $0$, but $f$ never reaches it. In both cases $\inf\{f(x)\}$ exists, but $\min\{f(x)\}$ does not.
+
+Why does this happen? Because $\im(f)$ is an \textit{open} set that does not contain its boundary. The fix is conceptually simple: work with \textit{closed} sets and \textit{closed} intervals $[x_-, x_+]$ rather than open ones $(x_-, x_+)$. Could we use open boxes instead? Hardly: if $x_-$ and $x_+$ ``can't be touched,'' just use $[x_- + \varepsilon_-, \, x_+ - \varepsilon_+]$ for appropriately small margins. On a computer, infinite precision is impossible anyway. We will generalize this to ``just use closed sets and be done with it.''
+
+
+% ---------------------------------------------------------------
+\subsection{Extended Reals, Infima, and Suprema}\label{ssec:extended-reals}
+
+To handle the pathological cases cleanly, we need a framework where infima always exist.
+
+\begin{defn}[Infimum and supremum]\label{def:inf-sup}
+	$\R$ is totally ordered: for any $x, y \in \R$, at least one of $x \leq y$ or $y \leq x$ holds.
+	For $S \subseteq \R$:
+	$s = \inf S$ if $s \leq t$ for all $t \in S$ and no larger number has this property;
+	$s = \sup S$ is defined symmetrically.
+	If $\inf S \in S$ then $\inf S = \min S$; analogously for $\sup$.
+\end{defn}
+
+Two issues remain: the infimum may not belong to $S$ (so $\min$ does not exist), and the infimum may not be finite.
+The \textit{extended reals} $\Rbar = \{-\infty\} \cup \R \cup \{+\infty\}$ resolve the second issue: every subset of $\Rbar$ has an infimum and a supremum in $\Rbar$.
+We adopt the conventions $\inf \emptyset = +\infty$ and $\sup \emptyset = -\infty$.
+
+With this, $f^*$ in \eqref{eq:opt-problem} always exists in $\Rbar$.
+Three outcomes are possible: $f^* = -\infty$ (unbounded below), $f^* \in \R$ but no $x^*$ attains it (infimum not achieved), or $f^* = f(x^*)$ for some $x^* \in X$ (minimum exists).
+Writing $\min$ instead of $\inf$ implicitly asserts the third case.
+
+On computers, $x \in \R$ is really a rational number with at most 16 digits of precision --- and data science is pushing toward even lower precision (float16, FP8).
+Finding the exact $x^*$ is impossible in general \cite{hansen1995}, but approximation errors are unavoidable anyway.
+What matters is finding \emph{approximate} solutions.
+
+
+% ---------------------------------------------------------------
+\subsection{Approximate Solutions and Optimality Gaps}\label{ssec:solution-quality}
+
+\begin{defn}[Approximate solution]\label{def:approx-solution}
+	Fix a tolerance $\varepsilon > 0$.
+	A point $x_\varepsilon$ is an \textit{$\varepsilon$-optimal solution} of $(P)$ if
+	\begin{equation}\label{eq:eps-optimal}
+		f^* \leq f(x_\varepsilon) \leq f^* + \varepsilon.
+	\end{equation}
+	How hard it is to find $x_\varepsilon$ depends on $\varepsilon$, on $f$, and on $X$.
+\end{defn}
+
+Two standard measures quantify the gap between a candidate $x$ and the true optimum:
+\begin{itemize}
+	\item $A(x) = f(x) - f^*$
+		\hfill\textit{[Absolute gap]}
+	\item $R(x) = A(x) / \abs{f^*}$
+		\hfill\textit{[Relative gap]}
+\end{itemize}
+
+The absolute gap is not scale-invariant. Replacing $(P)$ by $\min\{\alpha f(x)\}$ for $\alpha > 0$ gives $\nu(P_\alpha) = \alpha f^*$, so $R(x)$ stays the same while $A(x)$ scales by $\alpha$. The relative gap is ill-defined when $f^* = 0$; a common fix replaces $\abs{f^*}$ with $\max\{\abs{f^*}, 1\}$.
+
+Both measures require knowledge of $f^*$, which is typically unknown. This is \emph{the} central issue in optimization: computing (or estimating) $f^*$. Sometimes $f^*$ is approximately known --- in neural network training, $f^* \approx 0$ is a reasonable guess, but in SVM training it is not. And $f^*$ is only needed if a global optimum is required, which is not always the case.
+
+Much of optimization theory is devoted to bounding these gaps \emph{without} knowing $f^*$ --- through duality, descent lemmas, or convergence-rate analysis.
+
+
+% ---------------------------------------------------------------
+\subsection{Why Optimization is Hard}\label{ssec:why-hard}
+
+Even approximate optimization can be impossible.
+The reason is fundamental: isolated minima can hide anywhere \cite{hansen1995}.
+Does restricting to a bounded interval $X = [x_-, x_+]$ help?
+No --- there are still uncountably many points to examine.
+Is it because $f$ ``jumps''?
+Not quite: even continuous functions can have downward spikes of arbitrarily small width, scattered anywhere in the domain.
+This is true even on a bounded interval.
+
+The lesson: to make optimization \emph{possible} --- even approximately --- we must impose regularity conditions on $f$.
+The function cannot be allowed to change too fast.
+The weaker the conditions, the harder the problem; the stronger the conditions, the faster our algorithms.
+This trade-off is the organizing principle for everything that follows:
+\begin{itemize}
+	\item $f$ linear or quadratic with known coefficients $\Longrightarrow$ closed-form solution, $\mathcal{O}(1)$ (\Cref{sec:spectral}).
+	\item $f$ Lipschitz continuous $\Longrightarrow$ solvable, but only with $\mathcal{O}(1/\varepsilon)$ evaluations (\Cref{sec:univariate}).
+	\item $f$ quadratic, strongly convex $\Longrightarrow$ gradient methods with linear convergence, $\mathcal{O}(\log(1/\varepsilon))$ (\Cref{sec:quadratic-methods}).
+	\item $f$ smooth ($C^1$ or $C^2$), convex $\Longrightarrow$ gradient-based methods, $\mathcal{O}(1/\varepsilon)$ (\Cref{sec:smooth-methods}).
+	\item $f$ nonsmooth but convex $\Longrightarrow$ subgradient and bundle methods, $\mathcal{O}(1/\varepsilon^2)$ (\Cref{sec:nonsmooth}).
+\end{itemize}
+
+We begin with the nicest possible functions --- the ones where optimization is essentially trivial --- and work our way up.
+
+
+% ---------------------------------------------------------------
+\subsection{Multivariate Problems}\label{ssec:multivariate}
+
+\begin{defn}[Multivariate optimization]\label{def:multivariate}
+	When $f \colon \R^n \to \R$ with $n > 1$, the feasible region can take many forms.
+	A simple but common one is the \textit{box} (hyperrectangle):
+	\begin{equation}\label{eq:box-constraint}
+		X = \{x \in \R^n : x_- \leq x \leq x_+\},
+		\qquad x_-, x_+ \in \R^n,\; x_- \leq x_+,
+	\end{equation}
+	where the inequalities hold component-wise.
+\end{defn}
+
+The jump from $\R$ to $\R^n$ is dramatic.
+$\R^n$ is the Cartesian product of $\R$ with itself $n$ times --- ``exponentially larger'' in the sense that even the simplest discrete subset grows fast.
+Restrict to integer points in the unit box $\{0,1\}^n$: you still have $2^n$ candidates.
+With $n = 30$, that is already over a billion; with $n = 100$, more than the number of atoms in the universe.
+Continuous optimization sidesteps this combinatorial explosion by exploiting the structure of $f$ --- but only when $f$ is ``nice enough.''
+
+The dimension $n$ can range from small ($2$, $3$, $100$) to large ($10^4$, $10^5$) to enormous ($10^9$, $10^{11}$).
+Even visualizing $f$ is harder: $\Gr(f) \subset \R^{n+1}$ is unpicturable for $n > 2$.
+Level sets $L(f, v) \subset \R^n$ help, but only for $n \leq 3$.
+A more general tool --- the \textit{tomography} --- slices the function along a chosen direction, reducing the multivariate problem to a univariate one.
+We develop this idea in \Cref{sec:spectral}.
+
+
+% ---------------------------------------------------------------
+\subsection{Multi-objective Optimization}\label{ssec:multi-obj}
+
+So far we assumed the value of any $x \in X$ can be expressed as a single number --- which means that given $x'$ and $x''$, we can always tell which one we prefer.
+This relies on $\R$ having a total order.
+Often, however, there is more than one objective:
+\begin{equation}
+    (P) \quad \min\bigl\{[f_1(x),\, f_2(x),\, \dots,\, f_k(x)] : x \in X\bigr\},
+\end{equation}
+
+where $f_1, f_2, \dots$ may be contrasting or measured in incomparable units.
+Car cost versus flashiness versus fuel efficiency; loss function versus regularizer in machine learning; expected return versus risk in portfolio selection.
+
+\begin{defn}[Pareto optimality]\label{def:pareto}
+	Since $\R^k$ for $k > 1$ lacks a total order, there is no single ``best'' solution.
+	A feasible point $x^*$ is \textit{Pareto-optimal} (or \textit{non-dominated}) if no other $x \in X$ satisfies
+	$f_i(x) \leq f_i(x^*)$ for all $i$ with strict inequality for at least one $i$.
+	The set of all Pareto-optimal points is the \textit{Pareto frontier}.
+\end{defn}
+
+The Pareto frontier is typically a curve (when $k = 2$) or surface (when $k > 2$), and a decision-maker must choose a point on it.
+Two practical reductions to a single-objective problem:
+\begin{itemize}
+	\item \textbf{Scalarization:} $\min\{f_1(x) + \alpha\, f_2(x) : x \in X\}$.
+		Different $\alpha > 0$ trace different points on the frontier.
+	\item \textbf{Budgeting:} $\min\{f_1(x) : f_2(x) \leq \beta,\; x \in X\}$, or symmetrically $\min\{f_2(x) : f_1(x) \geq \beta_1,\; x \in X\}$.
+		The parameter $\beta$ controls the trade-off.
+\end{itemize}
+Choosing $\alpha$ or $\beta$ is inherently fuzzy --- it is the nature of multi-objective problems.
+In machine learning, this is typically handled at the modelling stage: regularization hyperparameters are tuned via grid search, cross-validation, or similar techniques.
+
+We assume from now on that the problem has been reduced to a single objective $f \colon \R^n \to \R$.
+The next section develops the algebraic tools needed to analyze the simplest nontrivial classes of objectives --- linear and quadratic functions --- and shows that even these ``easy'' cases require nontrivial machinery once $n > 1$.

@@ -1,0 +1,419 @@
+% ================================================================
+%  §6  Smooth Unconstrained Optimization
+% ================================================================
+\section{Smooth Unconstrained Optimization}\label{sec:smooth-methods}
+
+The quadratic case gave us clean formulas and exact stepsizes.
+Real objectives are messier: no finite termination, no closed-form line search, and convergence rates that depend on properties we may not know.
+This section extends the gradient method to general smooth functions, develops the line search machinery needed to make it work, and then introduces second-order and quasi-Newton methods that converge faster --- at a price.
+The unifying view: each algorithm constructs a \textit{model} of $f$ (first-order, second-order, or data-driven) and uses the model to choose the next iterate.
+The model is always wrong to some extent, and managing that mismatch is the core challenge.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{The Gradient Method}\label{ssec:gradient-general}
+
+The algorithm is the same as for quadratics, but now the tomography $\varphi_{x^i, d^i}(\alpha) = f(x^i + \alpha d^i)$ is no longer a parabola --- its shape depends on $f$.
+
+\begin{algorithm}
+	\caption{Gradient Method with Steepest Descent}
+	\begin{algorithmic}[1]
+		\Require $f$, initial $x$, tolerance $\varepsilon > 0$
+		\Ensure Approximate stationary point of $f$
+		\Procedure{SD}{$f, x, \varepsilon$}
+			\While{$\norm{\nabla f(x)} > \varepsilon$}
+				\State $d \gets -\nabla f(x)$
+				\State $\alpha \gets \mathrm{stepsize}(f, x, d)$
+				\State $x \gets x + \alpha d$
+			\EndWhile
+		\EndProcedure
+	\end{algorithmic}
+\end{algorithm}
+
+At each iterate $x^i$, the first-order model $L^i(x) = f(x^i) + \inner{\nabla f(x^i), x - x^i}$ is a good approximation only in a small ball around $x^i$.
+The update $x^{i+1} = x^i + \alpha^i d^i$ is meaningful only when $f(x^{i+1}) < f(x^i)$.
+
+The stepsize $\alpha^i$ is the critical design choice.
+Too large and the method overshoots: $f(x^{i+1}) > f(x^i)$.
+Too small and the method stagnates, decreasing $f$ only infinitesimally per step.
+Scylla and Charybdis --- and finding a path between them is the subject of the next subsections.
+
+Using the unnormalized gradient $d^i = -\nabla f(x^i)$ (rather than $d^i = -\nabla f(x^i)/\norm{\nabla f(x^i)}$) ties the step length to the gradient magnitude: far from the optimum the steps are large, near it they shrink automatically.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Fixed Stepsize}\label{ssec:fixed-stepsize}
+
+A fixed stepsize $\alpha^i = \bar{\alpha}$ is simple and cheap, but it needs a guarantee that $f$ decreases at every step.
+Such a guarantee requires controlling how fast $\nabla f$ can change --- i.e., $L$-smoothness (\Cref{def:L-smooth}).
+
+The tomography along the gradient direction gives $\varphi'_{x,-\nabla f(x)}(0) = -\norm{\nabla f(x)}^2 < 0$: the initial descent is always present.
+$L$-smoothness ensures this descent doesn't vanish too quickly.
+If $f$ is $L$-smooth, $\varphi$ inherits $[L\norm{d}^2]$-smoothness, giving the upper bound
+\begin{equation}\label{eq:tomography-upper-bound}
+	\varphi(\alpha) \leq \varphi(0) + \norm{\nabla f(x)}^2 \left[\frac{L\alpha^2}{2} - \alpha\right].
+\end{equation}
+The worst-case quadratic bound says: the function can curve \emph{up} at rate $L$, but we know the initial slope is $-\norm{\nabla f(x)}^2$.
+
+Choosing $\bar{\alpha} = 1/L$ yields the descent bound
+\begin{equation}\label{eq:fixed-step-descent}
+	f(x^{i+1}) - f(x^i) \leq -\frac{\norm{\nabla f(x^i)}^2}{2L}.
+\end{equation}
+The decrease is \emph{additive}, not multiplicative --- sublinear convergence:
+\begin{equation}\label{eq:sublinear-smooth}
+	f(x^k) - f^* \leq \frac{2L\norm{x^0 - x_*}^2}{k - 1}
+	\qquad \Longrightarrow \qquad
+	k \in \mathcal{O}\!\left(\frac{LD^2}{\varepsilon}\right).
+\end{equation}
+This matches the quadratic case when $\lambda_n = 0$ (\Cref{thm:sublinear-quad}).
+
+The $\mathcal{O}(1/\varepsilon)$ bound is not optimal for the class of $L$-smooth convex functions: $\mathcal{O}(1/\sqrt{\varepsilon})$ is achievable (see \Cref{ssec:accelerated}).
+But a lower bound shows that some problems are genuinely hard: there exist $L$-smooth functions for which any first-order algorithm requires $\Omega(1/\sqrt{\varepsilon})$ iterations.
+
+\paragraph{Linear convergence with strong convexity}
+
+If $f$ is also $\tau$-strongly convex, the mean value theorem gives $\nabla f(x) - \nabla f(x_*) = \nabla^2 f(w)(x - x_*)$ for some $w$.
+Setting $z = x - \alpha \nabla f(x)$:
+\begin{equation}\label{eq:strong-convex-contraction}
+	z - x_* = (I - \alpha \nabla^2 f(w))(x - x_*),
+	\qquad
+	\norm{z - x_*} \leq \norm{I - \alpha \nabla^2 f(w)} \cdot \norm{x - x_*}.
+\end{equation}
+The contraction factor is $r = \norm{I - \alpha \nabla^2 f(w)} = \max\{|1 - \alpha\lambda_1|,\, |1 - \alpha\lambda_n|\}$.
+Since $\tau \leq \lambda_n \leq \lambda_1 \leq L$, the optimal choice $\alpha = 2/(L + \tau)$ gives
+\begin{equation}\label{eq:optimal-fixed-rate}
+	r = \frac{L - \tau}{L + \tau} = \frac{\kappa - 1}{\kappa + 1} < 1,
+	\qquad \kappa = L / \tau.
+\end{equation}
+Linear convergence, with rate governed by the condition number --- the same story as for quadratics, but now for any $\tau$-strongly convex, $L$-smooth objective.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Inexact Line Search}\label{ssec:line-search}
+
+Exact line search ($\alpha^* \in \argmin_\alpha \varphi(\alpha)$) is rarely practical for general $f$.
+We need cheaper alternatives that still guarantee convergence.
+
+\paragraph{Armijo condition (avoiding Scylla: overshooting)}
+
+\begin{equation}\label{eq:armijo}
+	\varphi(\alpha) \leq \varphi(0) + m_1 \alpha\, \varphi'(0),
+	\qquad 0 < m_1 \ll 1.
+\end{equation}
+This ensures \textit{sufficient decrease}: the function drops by at least a fraction $m_1$ of what the linear model predicts.
+Small $\alpha$ always satisfies Armijo, but tiny steps cause stagnation.
+
+\paragraph{Wolfe condition (avoiding Charybdis: stagnation)}
+
+\begin{equation}\label{eq:wolfe}
+	\varphi'(\alpha) \geq m_3\, \varphi'(0),
+	\qquad m_1 < m_3 < 1.
+\end{equation}
+The derivative at the accepted point should be less negative than at the start --- we should have made ``enough'' progress along the ray.
+The \textit{strong Wolfe condition} $|\varphi'(\alpha)| \leq m_3\, |\varphi'(0)|$ additionally prevents $\varphi'(\alpha) \gg 0$, filtering out some local maxima.
+
+\begin{thm}[Existence of Armijo--Wolfe stepsizes]\label{thm:aw-exist}
+	If $\varphi \in C^1$ and $\varphi(\alpha)$ is bounded below for $\alpha \geq 0$, then there exists $\alpha$ satisfying both Armijo and Wolfe conditions \cite{nocedal2006}.
+\end{thm}
+
+Armijo plus Wolfe captures all local minima of $\varphi$ (unless $m_1 \approx 1$).
+Armijo plus strong Wolfe refines this by filtering maxima.
+
+\paragraph{Backtracking line search}
+
+The simplest practical approach: check only Armijo, and shrink $\alpha$ until it passes.
+
+\begin{algorithm}
+	\caption{Backtracking Line Search (BLS)}
+	\begin{algorithmic}[1]
+		\Require $\varphi, \alpha, m_1, \tau$ with $\tau < 1$
+		\Procedure{BLS}{$\varphi, \alpha, m_1, \tau$}
+			\While{$\varphi(\alpha) > \varphi(0) + m_1 \alpha\, \varphi'(0)$}
+				\State $\alpha \gets \tau\, \alpha$
+			\EndWhile
+		\EndProcedure
+	\end{algorithmic}
+\end{algorithm}
+
+Starting from $\alpha = 1$, the procedure generates $\alpha \geq \tau^h$ where $h$ is the number of shrinkage steps needed.
+If stepsizes stay bounded away from zero throughout the optimization, convergence is ensured.
+
+\paragraph{Convergence with Armijo--Wolfe}
+
+From $L$-smoothness and the Wolfe condition, a lower bound on the accepted stepsize follows: $\alpha' > (1 - m_3)/L$.
+If $f$ is also $\tau$-convex, convergence is linear with $r \approx 1 - \tau/L$, where the ``$\approx$'' depends on $m_1$ and $m_3$.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Efficiency for General Functions}\label{ssec:efficiency-general}
+
+\begin{thm}[Local convergence rate]\label{thm:grad-general}
+	Let $f \in C^2$ with $x_*$ a local minimum satisfying $\nabla^2 f(x_*) \succ 0$.
+	The exact-line-search gradient method converges linearly with
+	\begin{equation}\label{eq:local-convergence-rate}
+		r = \left(\frac{\lambda_1 - \lambda_n}{\lambda_1 + \lambda_n}\right)^{\!2},
+	\end{equation}
+	where $\lambda_1, \lambda_n$ are the extreme eigenvalues of $\nabla^2 f(x_*)$.
+\end{thm}
+
+These properties need only hold in $\mathcal{B}(x_*, \delta)$.
+Inexact line search may slow convergence ($r \approx 1 - \lambda_n/\lambda_1$), but reduces function evaluations per iteration --- a practical trade-off.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Twisted Gradient Methods and General Descent}\label{ssec:twisted-descent}
+
+The direction $d^i = -\nabla f(x^i)$ is not the only descent direction.
+Any $d^i$ with $\inner{d^i, \nabla f(x^i)} < 0$ works --- the entire open half-space opposite to $\nabla f$ consists of descent directions.
+
+\begin{defn}[Descent direction]\label{def:descent-dir}
+	A direction $d^i$ is a \textit{descent direction} if $\cos(\theta^i) = \inner{d^i, \nabla f(x^i)} / (\norm{d^i} \norm{\nabla f(x^i)}) < 0$.
+\end{defn}
+
+A ``twisted'' gradient method uses $d^i = H^i(-\nabla f(x^i))$ where $H^i$ is a positive definite matrix.
+When $H^i \succ 0$, the direction is guaranteed to be descent.
+Newton's method sets $H^i = [\nabla^2 f(x^i)]^{-1}$; quasi-Newton methods approximate this.
+
+\begin{thm}[Zoutendijk's theorem]\label{thm:zoutendijk}
+	If $f \in C^1$ is $L$-smooth with $f^* > -\infty$, and stepsizes satisfy Armijo--Wolfe, then
+	\begin{equation}\label{eq:zoutendijk}
+		\sum_{i=1}^{\infty} \cos^2(\theta^i)\, \norm{\nabla f(x^i)}^2 < \infty.
+	\end{equation}
+	If $\cos(\theta^i) \geq \bar{\theta} > 0$ for all $i$ (the angles stay bounded away from $90^\circ$), then $\norm{\nabla f(x^i)} \to 0$.
+\end{thm}
+
+Zoutendijk's theorem is the fundamental convergence guarantee for descent methods.
+It says: as long as you don't search in directions nearly orthogonal to the gradient, the gradient norm must eventually vanish.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Newton's Method}\label{ssec:newton-multivariate}
+
+Newton's method replaces the linear model with a quadratic one, using the Hessian to capture local curvature.
+The payoff is quadratic convergence --- but only locally.
+
+\begin{defn}[Newton direction]\label{def:newton-dir}
+	If $\nabla^2 f(x^i) \succ 0$, the \textit{Newton direction} is
+	$d^i = -[\nabla^2 f(x^i)]^{-1} \nabla f(x^i)$.
+	It minimizes the second-order model $Q^i(z) = f(x^i) + \inner{\nabla f(x^i), z - x^i} + \frac{1}{2}(z - x^i)^T \nabla^2 f(x^i)(z - x^i)$.
+\end{defn}
+
+When $\nabla^2 f(x^i) \succ 0$, the Newton direction is descent: $\inner{\nabla f(x^i), d^i} = -\nabla f(x^i)^T [\nabla^2 f(x^i)]^{-1} \nabla f(x^i) < 0$.
+
+\paragraph{Geometric interpretation}
+
+For a quadratic $f(x) = \frac{1}{2} x^T Q x + q^T x$ with $Q \succ 0$, Newton terminates in one step.
+The geometric reason: let $Q = RR^T$ and change variables to $z = Rx$.
+In $z$-space the Hessian is the identity, and steepest descent converges in one step.
+Newton in $x$-space \emph{is} steepest descent in the space where the Hessian is the identity.
+
+\paragraph{Convergence}
+
+\begin{thm}[Quadratic convergence]\label{thm:newton-quad}
+	If $f \in C^3$, $\nabla f(x_*) = 0$, $\nabla^2 f(x_*) \succ 0$, then $\exists\, \delta > 0$ such that starting in $\mathcal{B}(x_*, \delta)$ gives quadratic convergence.
+\end{thm}
+
+\begin{thm}[Global convergence with line search]\label{thm:newton-global}
+	If $f \in C^2$ is $L$-smooth and $\tau$-convex, then $\cos(\theta^i) \geq \tau/L$, and Zoutendijk's theorem guarantees global convergence.
+	Near $x_*$, the Armijo condition with $m_1 \leq 1/2$ accepts the full Newton step ($\alpha = 1$) eventually, recovering quadratic convergence.
+\end{thm}
+
+\paragraph{The nonconvex case}
+
+When $\nabla^2 f(x^i) \not\succ 0$, the Newton direction may not be descent.
+The fix: replace $\nabla^2 f(x^i)$ with a positive definite approximation $H^i$ satisfying $\tau I \preceq H^i \preceq LI$.
+A simple choice: $H^i = \nabla^2 f(x^i) + \epsilon^i I$ with $\epsilon^i = \max\{0,\, \delta - \lambda_{\min}(\nabla^2 f(x^i))\}$.
+If $\{x^i\} \to x_*$ with $\nabla^2 f(x_*) \succ 0$, then $\epsilon^i = 0$ eventually, recovering quadratic convergence.
+The cost is $\mathcal{O}(n^3)$ per iteration (Cholesky factorization), prohibitive for very large $n$.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Trust Region Methods}\label{ssec:trust-region}
+
+Trust region methods reverse the line search logic: first choose a radius $r$ (the ``trust region''), then find the best direction within it.
+
+\begin{defn}[Trust region subproblem]\label{def:trust-region}
+	Given a trust region $\mathcal{B}_2(x^i, r)$:
+	$x^{i+1} \in \argmin\{Q^i(z) : \norm{z - x^i} \leq r\}$.
+\end{defn}
+
+The KKT conditions for this subproblem give $[\nabla^2 f(x^i) + \lambda^i I]\, d^i = -\nabla f(x^i)$ with $\lambda^i \geq 0$.
+Three cases: if $\lambda^i > 0$, the constraint is active (similar to Hessian modification with $\epsilon^i = \lambda^i$); if $\norm{d^i} < r$, then $\lambda^i = 0$ and we get the plain Newton step; as $\{x^i\} \to x_*$, eventually $\lambda^i = 0$ and quadratic convergence is recovered.
+
+Trust region methods handle nonconvex Hessians naturally: negative-curvature directions are exploited within the trust region rather than suppressed.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Quasi-Newton Methods}\label{ssec:quasi-newton}
+
+Computing and inverting the Hessian costs $\mathcal{O}(n^3)$.
+Quasi-Newton methods approximate the Hessian (or its inverse) using only gradient differences, achieving superlinear convergence at $\mathcal{O}(n^2)$ per iteration.
+
+\begin{defn}[Secant equation]\label{def:secant}
+	Define $s^i = x^{i+1} - x^i$ and $y^i = \nabla f(x^{i+1}) - \nabla f(x^i)$.
+	The \textit{secant equation} requires $H^{i+1} s^i = y^i$.
+	For compatibility with $H^{i+1} \succ 0$, the \textit{curvature condition} $\inner{s^i, y^i} > 0$ must hold --- enforceable via Armijo--Wolfe line search.
+\end{defn}
+
+Superlinear convergence holds whenever the approximation resembles the true Hessian along the search direction: $\lim_{i \to \infty} \norm{(H^i - \nabla^2 f(x^i))\, d^i} / \norm{d^i} = 0$.
+
+\paragraph{DFP formula}
+
+The Davidon--Fletcher--Powell update finds the closest positive-definite matrix satisfying the secant equation (in a weighted Frobenius norm sense):
+\begin{equation}\label{eq:dfp-update}
+	H^{i+1} = (I - \rho^i y^i (s^i)^T)\, H^i\, (I - \rho^i s^i (y^i)^T) + \rho^i y^i (y^i)^T,
+	\quad \rho^i = 1/\inner{s^i, y^i}.
+\end{equation}
+
+\paragraph{BFGS formula}
+
+The Broyden--Fletcher--Goldfarb--Shanno update works on both $H^i$ and its inverse $B^i = (H^i)^{-1}$:
+\begin{align*}
+	H^{i+1} &= H^i + \rho^i y^i (y^i)^T - \frac{H^i s^i (s^i)^T H^i}{(s^i)^T H^i s^i}, \\
+	B^{i+1} &= (I - \rho^i s^i (y^i)^T)\, B^i\, (I - \rho^i y^i (s^i)^T) + \rho^i s^i (s^i)^T.
+\end{align*}
+Both are rank-two updates at $\mathcal{O}(n^2)$ cost.
+In practice, BFGS generally outperforms DFP.
+DFP and BFGS are the endpoints of the \textit{Broyden family}: $H^{i+1} = \beta\, H^{i+1}_{\mathrm{DFP}} + (1 - \beta)\, H^{i+1}_{\mathrm{BFGS}}$ for $\beta \in [0, 1]$.
+
+\paragraph{L-BFGS}
+
+For very large $n$, even $\mathcal{O}(n^2)$ is too much.
+L-BFGS stores only the last $k \ll n$ correction pairs $(s^i, y^i)$ and reconstructs the inverse Hessian on the fly.
+Memory and time per iteration: $\mathcal{O}(kn)$.
+Large $k$ approximates Newton; small $k$ degrades toward steepest descent.
+A common base matrix: $B^{i-k} = \gamma^i I$ with $\gamma^i = \inner{s^{i-1}, y^{i-1}} / \norm{y^{i-1}}^2$.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Deflected Gradient Methods}\label{ssec:deflected}
+
+Twisting ($d^i = H^i(-\nabla f(x^i))$) costs at least $\mathcal{O}(n^2)$.
+\textit{Deflection} is cheaper --- $\mathcal{O}(n)$ by design:
+\begin{equation}\label{eq:deflected-gradient}
+	d^i = -\nabla f(x^i) + \beta^i d^{i-1}.
+\end{equation}
+If $\beta^0 = 0$ (starting with steepest descent), the direction aggregates all past gradients.
+Ensuring descent ($\varphi'_{x^i, d^i}(0) < 0$) is nontrivial, unlike twisting where $H^i \succ 0$ suffices.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Nonlinear Conjugate Gradient}\label{ssec:nonlinear-cg}
+
+The conjugate gradient idea from \Cref{ssec:conjugate-gradient} extends to general functions via deflection.
+
+\begin{algorithm}
+	\caption{Nonlinear Conjugate Gradient (NCG)}
+	\begin{algorithmic}[1]
+		\Require $f, x, \varepsilon$
+		\Procedure{NCG}{$f, x, \varepsilon$}
+			\State $\nabla f^- \gets 0$
+			\While{$\norm{\nabla f(x)} > \varepsilon$}
+				\If{$\nabla f^- = 0$}
+					\State $d \gets -\nabla f(x)$ \Comment{First step: steepest descent}
+				\Else
+					\State $\beta \gets$ chosen formula
+					\State $d \gets -\nabla f(x) + \beta\, d^-$
+				\EndIf
+				\State $\alpha \gets \mathrm{LS}(f, x, d)$;\; $x \gets x + \alpha d$
+				\State $d^- \gets d$;\; $\nabla f^- \gets \nabla f(x)$
+			\EndWhile
+		\EndProcedure
+	\end{algorithmic}
+\end{algorithm}
+
+Four standard formulas for $\beta$:
+\begin{itemize}
+	\item Fletcher--Reeves: $\beta_{\mathrm{FR}}^i = \norm{\nabla f(x^i)}^2 / \norm{\nabla f(x^{i-1})}^2$
+	\item Polak--Ribi\`ere: $\beta_{\mathrm{PR}}^i = \inner{\nabla f(x^i) - \nabla f(x^{i-1}),\, \nabla f(x^i)} / \norm{\nabla f(x^{i-1})}^2$
+	\item Hestenes--Stiefel: $\beta_{\mathrm{HS}}^i = \inner{\nabla f(x^i) - \nabla f(x^{i-1}),\, \nabla f(x^i)} / \inner{\nabla f(x^i) - \nabla f(x^{i-1}),\, d^{i-1}}$
+	\item Dai--Yuan: $\beta_{\mathrm{DY}}^i = \norm{\nabla f(x^i)}^2 / \inner{\nabla f(x^i) - \nabla f(x^{i-1}),\, d^{i-1}}$
+\end{itemize}
+For quadratic $f$ with exact line search, all four reduce to the standard conjugate gradient and terminate in $n$ steps.
+For general $f$, they differ.
+
+Each formula requires specific line search conditions.
+FR needs $m_1 < m_3 < 1/2$ (strong Wolfe).
+PR may produce non-descent directions; the fix is $\beta_{\mathrm{PR}+}^i = \max\{\beta_{\mathrm{PR}}^i, 0\}$.
+These ``$\max\{0, \cdot\}$'' modifications reset the direction to steepest descent when deflection goes wrong --- a form of \textit{restart}.
+Without restarts, FR can enter a failure mode: if $\norm{\nabla f(x^i)} \ll \norm{d^i}$, then $\cos(\theta^i) \approx 0$ and the steps barely move.
+
+In practice, all variants perform similarly, with results that vary significantly across problems.
+On quadratics, $n$ conjugate gradient steps approximate one Newton step: $\norm{x^{i+n} - x_*} \leq r\, \norm{x^i - x_*}^2$.
+For large $n$ this can be expensive; the method is powerful but not easy to tune.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Heavy Ball Method}\label{ssec:heavy-ball}
+
+The heavy ball method adds \textit{momentum}: a fraction of the previous step.
+\begin{equation}\label{eq:heavy-ball}
+	x^{i+1} = x^i - \alpha^i \nabla f(x^i) + \beta^i (x^i - x^{i-1}).
+\end{equation}
+The term $\beta^i(x^i - x^{i-1})$ maintains the previous direction, reducing zig-zagging; $-\nabla f(x^i)$ steers toward $x_*$.
+This is \emph{not} an $f$-descent method ($f(x^{i+1})$ may increase), but with proper $\alpha^i, \beta^i$ it achieves $d$-descent: $\norm{x^{i+1} - x_*} \leq r\, \norm{x^i - x_*}$.
+
+The dynamics follow a two-term recurrence.
+Using the mean value theorem, the state update can be written as
+\begin{equation}\label{eq:heavy-ball-state}
+	\begin{bmatrix} x^{i+1} - x_* \\ x^i - x_* \end{bmatrix}
+	= C^i
+	\begin{bmatrix} x^i - x_* \\ x^{i-1} - x_* \end{bmatrix},
+	\qquad
+	C^i = \begin{bmatrix}
+		(1 + \beta^i)I - \alpha^i \nabla^2 f(w^i) & -\beta^i I \\
+		I & 0
+	\end{bmatrix}.
+\end{equation}
+The spectral radius $\rho(C^i)$ governs convergence.
+Minimizing over $\alpha, \beta$ for the class $\tau I \preceq \nabla^2 f \preceq LI$ gives the optimal parameters:
+\begin{equation}\label{eq:heavy-ball-optimal}
+	\alpha = \frac{4}{(\sqrt{L} + \sqrt{\tau})^2},
+	\qquad
+	\beta = \left(\frac{\sqrt{L} - \sqrt{\tau}}{\sqrt{L} + \sqrt{\tau}}\right)^{\!2},
+	\qquad
+	r = \frac{\sqrt{\kappa} - 1}{\sqrt{\kappa} + 1}.
+\end{equation}
+
+This is the same $\sqrt{\kappa}$-dependence as conjugate gradient --- a dramatic improvement over steepest descent's $\kappa$-dependence.
+
+\begin{defn}[Gelfand's formula and quasi-linear convergence]\label{def:gelfand}
+	For any matrix $C$, $\rho(C) = \lim_{i \to \infty} \norm{C^i}^{1/i}$.
+	This means: for any $\varepsilon > 0$, $\exists\, h$ such that $\norm{C^i} \leq (\rho(C) + \varepsilon)^i$ for all $i \geq h$.
+	Convergence is linear if $\rho(C) + \varepsilon < 1$, but the method may not converge in the early iterates --- it needs a ``warm-up'' phase.
+	This is called \textit{quasi-linear convergence}.
+\end{defn}
+
+For non-convex $f$, the method converges if $\beta \in [0, 1)$ and $\alpha \in (0, 2(1 - \beta)/L)$.
+Pushing $\beta \to 1$ forces $\alpha \to 0$: there is a tension between momentum and step size.
+If $\tau = 0$, the error decreases as $\mathcal{O}(1/k)$ --- same as vanilla gradient descent.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Accelerated Gradient Method}\label{ssec:accelerated}
+
+Nesterov's accelerated gradient achieves \textit{optimal} worst-case rates among first-order methods.
+
+\begin{algorithm}
+	\caption{Accelerated Gradient (ACCG)}
+	\begin{algorithmic}[1]
+		\Procedure{ACCG}{$f, x, \varepsilon$}
+			\State $x_- \gets x$;\; $\gamma \gets 1$
+			\Repeat
+				\State $\gamma_- \gets \gamma$;\;
+					$\gamma \gets (\sqrt{4\gamma^2 + \gamma^4} - \gamma^2) / 2$
+				\State $\beta \gets \gamma(\gamma_-^{-1} - 1)$
+				\State $y \gets x + \beta(x - x_-)$
+				\State $g \gets \nabla f(y)$
+				\State $x_- \gets x$;\; $x \gets y - L^{-1} g$
+			\Until{$\norm{g} \leq \varepsilon$}
+		\EndProcedure
+	\end{algorithmic}
+\end{algorithm}
+
+For $L$-smooth convex functions, the method achieves $\mathcal{O}(LD^2/k^2)$ error --- equivalently, $\mathcal{O}(1/\sqrt{\varepsilon})$ iterations.
+This matches the lower bound: no first-order method can do better in the worst case.
+If $f$ is also $\tau$-convex, convergence is linear with $r = (\sqrt{\kappa} - 1)/(\sqrt{\kappa} + 1)$.
+
+The method evaluates $\nabla f$ at an \textit{extrapolated} point $y$ rather than $x$: it ``looks ahead'' before stepping.
+It is designed to optimize worst-case behavior; in practice it can be slower than simpler methods on well-conditioned problems, but it achieves exactly what it is built for.

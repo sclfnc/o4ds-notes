@@ -1,0 +1,307 @@
+% ================================================================
+%  §4  Unconstrained Optimality and Convexity
+% ================================================================
+\section{Unconstrained Optimality and Convexity}\label{sec:optimality}
+
+Moving from one dimension to many changes everything.
+Directions multiply, the landscape acquires curvature in many independent ways, and the derivative --- a scalar in $\R$ --- becomes a vector in $\R^n$.
+This section builds the calculus we need: gradients, Hessians, optimality conditions, and the hierarchy of convexity notions that determine how hard a problem is to solve.
+
+The practical motivation is concrete.
+An \textit{artificial neural network} (ANN) is an $L$-layered directed graph: layer $l = 1$ is the input ($n(1) = h$ neurons), layer $l = L$ is the output ($n(L) = k$ neurons), and layers $2, \dots, L-1$ are hidden.
+Each neuron $i$ in layer $l+1$ computes
+$o_i^{l+1}(W^{l+1}; s) = \sigma_i^{l+1}\bigl(\sum_{j \in N(l)} w_{ji}^l\, o_j^l(W^l; s) + w_i^l\bigr)$,
+where $w_{ji}^l$ are the arc weights and $\sigma_i^l(\cdot)$ is the \textit{activation function}.
+Common choices (with their derivatives): identity $\sigma(z) = z$ ($\sigma' = 1$), sigmoid $\sigma(z) = 1/(1 + e^{-z})$ ($\sigma' = \sigma(1 - \sigma)$), hyperbolic tangent ($\sigma' = 1 - \sigma^2$), and ReLU $\sigma(z) = \max\{z, 0\}$ ($\sigma' = 1$ if $z > 0$, $0$ otherwise --- nondifferentiable at $z = 0$).
+
+The total parameter count is $n = n(2)(n(1) + 1) + n(3)(n(2) + 1) + \cdots + n(L)(n(L-1) + 1)$ --- easily in the millions or billions.
+Training amounts to minimizing a loss $f(w) = \sum_{s \in S} \mathcal{L}(y^s, o^L(w; s))$, where $\mathcal{L}$ is typically the MSE $\mathcal{L}(z) = \frac{1}{2}\norm{z}^2$ or the cross-entropy.
+The objective is highly nonlinear, very-large-scale, and nonconvex; even computing $f(w)$ is expensive when $|S|$ is large.
+Regularization ($\lambda\norm{w}^2$ or $\lambda\norm{w}_1$) is standard, and the hyperparameter $\lambda > 0$ is fixed via grid search --- itself an exponential problem (\Cref{ssec:curse-dim}).
+
+A crucial practical observation: global optima are \emph{not} required (and may even be harmful --- overfitting).
+Local optima are typically of very good quality because the loss landscape is ``not adversarial'': gradient-based methods find good solutions reliably.
+This is the setting where the theory of this section pays off.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{The Curse of Dimensionality}\label{ssec:curse-dim}
+
+In one dimension, a Lipschitz function on $[x_-, x_+]$ can be $\varepsilon$-optimized in $\mathcal{O}(L \cdot D/\varepsilon)$ evaluations (\Cref{thm:lip-complexity}).
+What happens in $\R^n$?
+A uniform grid with spacing $2\varepsilon/L$ in each coordinate yields $(L\cdot D/\varepsilon)^n$ grid points --- exponential in the dimension.
+
+\begin{thm}[Multivariate Lipschitz lower bound]\label{thm:multivariate-lip}
+	For the class of $L$-Lipschitz functions on a box of diameter $D$ in $\R^n$, no algorithm can guarantee an $\varepsilon$-optimal solution in fewer than $\Omega((L \cdot D / \varepsilon)^n)$ evaluations \cite{hansen1995}.
+\end{thm}
+
+This is the \textit{curse of dimensionality}: for $n = 3$ or $5$, a grid is feasible (and is, in fact, the standard approach to hyperparameter optimization); for $n = 100$, it is absurd.
+If $f$ is analytic, clever spatial branch-and-bound (\Cref{ssec:global-opt}) can find the global optimum; if $f$ is a black box (no derivatives), effective heuristics exist but offer no optimality guarantee \cite{serafino2014}.
+In all cases, complexity grows ``fast'' with $n$.
+
+Even when iterative methods break the exponential barrier, they are not free of $n$-dependence.
+Most convergence results are \textit{dimension-independent} (the iteration count doesn't explicitly depend on $n$), but the cost per iteration does: computing $f$ or $\nabla f$ takes at least $\mathcal{O}(n)$, and for many problems $\mathcal{O}(n^2)$.
+For $n \approx 10^9$, even $\mathcal{O}(n^2)$ is prohibitive; some hidden dependency on $n$ may also lurk in the $\mathcal{O}(\cdot)$ constants.
+
+The way out: exploit structure.
+If $f$ is smooth, gradient-based methods break the exponential barrier entirely.
+If $f$ is convex, local equals global, and the problem becomes tractable.
+Both properties require the multivariate calculus we develop next.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Neighborhoods and Convergence}\label{ssec:convergence}
+
+\begin{defn}[Convergence of a sequence]\label{def:convergence}
+	A sequence $\{x_i\}$ in $\R^n$ converges to $x$ if
+	\begin{equation}\label{eq:convergence}
+		\forall\, \varepsilon > 0,\; \exists\, h : \norm{x_i - x} \leq \varepsilon \;\;\forall\, i \geq h,
+	\end{equation}
+	equivalently $x_i \in \mathcal{B}(x, \varepsilon)$ for all large $i$, equivalently $\lim_{i \to \infty} \norm{x_i - x} = 0$.
+	We write $\{x_i\} \to x$.
+\end{defn}
+
+The ball $\mathcal{B}(x, r)$ from \Cref{def:ball} replaces the interval $[x - r, x + r]$ as the basic neighborhood.
+Convergence in $\R^n$ reduces to convergence of each component, but the norm-based definition is more natural for optimization --- it measures distance from the target without privileging any coordinate.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Gradients, Jacobians, and Hessians}\label{ssec:grad-hess}
+
+In one dimension, the derivative $f'(x)$ tells us the direction of steepest increase.
+In $\R^n$, the same role is played by the gradient --- but now we must also handle vector-valued functions and second-order information.
+
+\begin{defn}[Directional derivative]\label{def:dir-deriv}
+	For $f \colon \R^n \to \R$, the \textit{directional derivative} at $x$ along $d \in \R^n$ is
+	\begin{equation}\label{eq:directional-derivative}
+		\frac{\partial f}{\partial d}(x)
+		= \lim_{t \to 0} \frac{f(x + td) - f(x)}{t}
+		= \varphi'_{x,d}(0),
+	\end{equation}
+	where $\varphi_{x,d}$ is the tomography from \Cref{def:tomography}.
+	The directional derivative measures the rate of change of $f$ along $d$, evaluated at $\alpha = 0$.
+\end{defn}
+
+\begin{defn}[Gradient]\label{def:gradient}
+	The \textit{gradient} of $f \colon \R^n \to \R$ at $x$ is the vector of partial derivatives:
+	\begin{equation}\label{eq:gradient}
+		\nabla f(x)
+		= \left[\frac{\partial f}{\partial x_1},\;
+			\frac{\partial f}{\partial x_2},\;
+			\dots,\;
+			\frac{\partial f}{\partial x_n}\right]^T \in \R^n.
+	\end{equation}
+	It points in the direction of steepest increase of $f$, and its norm equals the maximum directional derivative: $\max_{\norm{d}=1} \frac{\partial f}{\partial d}(x) = \norm{\nabla f(x)}$, attained at $d = \nabla f(x) / \norm{\nabla f(x)}$.
+\end{defn}
+
+The connection to tomographies is direct.
+If $f$ is differentiable, the directional derivative along any $d$ is $\frac{\partial f}{\partial d}(x) = \inner{\nabla f(x), d}$.
+When $d = -\nabla f(x)$, this equals $-\norm{\nabla f(x)}^2 < 0$: the negative gradient is always a descent direction.
+This observation is the engine of every gradient-based algorithm.
+
+\begin{exm}[Gradient of a quadratic]
+	For $f(x) = \frac{1}{2} x^T Q x + q^T x$ we get $\nabla f(x) = Qx + q$.
+	The gradient is affine in $x$ --- this is what makes quadratic optimization tractable.
+\end{exm}
+
+\begin{defn}[Differentiability]\label{def:differentiable}
+	A function $f$ is \textit{differentiable} at $x$ if there exists a vector $b \in \R^n$ such that
+	\begin{equation}\label{eq:differentiability}
+		\lim_{\norm{h} \to 0} \frac{\abs{f(x + h) - f(x) - \inner{b, h}}}{\norm{h}} = 0.
+	\end{equation}
+	When this holds, $b = \nabla f(x)$ and the first-order model $L_x(z) = f(x) + \inner{\nabla f(x), z - x}$ approximates $f$ to first order near $x$.
+	If $f$ is differentiable everywhere with continuous gradient, then $f \in C^1$.
+\end{defn}
+
+\begin{thm}[Continuity and differentiability]\label{thm:cont-diff}
+	Continuous partial derivatives imply differentiability, which implies continuity:
+	\begin{equation}\label{eq:regularity-chain}
+		\text{continuous partials in } \mathcal{B}(x, \delta)
+		\;\Rightarrow\;
+		f \text{ differentiable at } x
+		\;\Rightarrow\;
+		f \text{ continuous at } x.
+	\end{equation}
+	Neither implication reverses in general.
+\end{thm}
+
+\begin{defn}[Jacobian]\label{def:jacobian}
+	For a vector-valued function $f \colon \R^n \to \R^m$, the \textit{Jacobian} at $x$ is the $m \times n$ matrix of first partial derivatives:
+	\begin{equation}\label{eq:jacobian}
+		J_f(x) = \begin{bmatrix}
+			\partial f_1/\partial x_1 & \cdots & \partial f_1/\partial x_n \\
+			\vdots & \ddots & \vdots \\
+			\partial f_m/\partial x_1 & \cdots & \partial f_m/\partial x_n
+		\end{bmatrix}.
+	\end{equation}
+	When $m = 1$, the Jacobian reduces to the gradient (as a row vector).
+\end{defn}
+
+\begin{defn}[Hessian]\label{def:hessian}
+	For $f \colon \R^n \to \R$ with $f \in C^2$, the \textit{Hessian} is the $n \times n$ matrix of second partial derivatives:
+	\begin{equation}\label{eq:hessian}
+		\nabla^2 f(x) = J_{\nabla f}(x),
+		\qquad
+		[\nabla^2 f(x)]_{ij} = \frac{\partial^2 f}{\partial x_i \partial x_j}.
+	\end{equation}
+	The Hessian is symmetric whenever the second partial derivatives are continuous.
+\end{defn}
+
+\begin{exm}[Hessians of simple functions]
+	For a linear function $f(x) = \inner{b, x}$: $\nabla^2 f(x) = 0$.
+	For a quadratic $f(x) = \frac{1}{2} x^T Q x + q^T x$: $\nabla^2 f(x) = Q$ (constant).
+\end{exm}
+
+\begin{rem}[Regularity classes]\label{rem:regularity}
+	$f \in C^2$ means the Hessian is symmetric and continuous everywhere, so the gradient is $C^1$.
+	While $C^2$ (or $C^3$) regularity is convenient for theory, many practical objectives have lower regularity --- piecewise smooth functions, for instance.
+	\Cref{sec:nonsmooth} addresses such cases.
+\end{rem}
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Optimality Conditions}\label{ssec:optimality-conditions}
+
+These are the multivariate analogues of $f'(x^*) = 0$ and $f''(x^*) \geq 0$.
+The logic is the same as in one dimension: the gradient condition eliminates non-stationary points, and the Hessian condition distinguishes minima from maxima and saddle points.
+
+\begin{thm}[Optimality conditions]\label{thm:optimality}
+	Let $f \colon \R^n \to \R$ be sufficiently smooth.
+	\begin{itemize}
+		\item \textit{First-order necessary:} if $x$ is a local minimum, then $\nabla f(x) = 0$.
+		\item \textit{Second-order necessary:} if $\nabla f(x) = 0$ and $x$ is a local minimum, then $\nabla^2 f(x) \succeq 0$.
+		\item \textit{Second-order sufficient:} if $\nabla f(x) = 0$ and $\nabla^2 f(x) \succ 0$, then $x$ is a strict local minimum.
+	\end{itemize}
+\end{thm}
+
+The gap between necessary and sufficient sits at $\nabla^2 f(x) \succeq 0$ but $\nabla^2 f(x) \not\succ 0$ --- i.e., the Hessian is positive semidefinite with at least one zero eigenvalue.
+Higher-order information is needed to decide.
+
+Two practical consequences.
+First, local optimization reduces (approximately) to solving the nonlinear system $\nabla f(x) = 0$ --- a nontrivial task when $f$ is not quadratic.
+Second, when $f$ is ``simple'' (quadratic), $\nabla f(x) = 0$ becomes a \textit{linear} system $Qx + q = 0$: quadratic models are going to be useful as building blocks.
+But stationary points are not always local minima --- they can be maxima or saddle points --- so the Hessian check matters.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Convexity}\label{ssec:convexity}
+
+The optimality conditions above are necessary but not sufficient (except in the strict case).
+Convexity fills this gap: for convex functions, every local minimum is automatically global, and $\nabla f(x) = 0$ is both necessary and sufficient for global optimality.
+
+\begin{defn}[Convex function]\label{def:convex}
+	A function $f$ is \textit{convex} if, for all $x, z \in \R^n$ and $\alpha \in [0,1]$,
+	\begin{equation}\label{eq:convexity}
+		f(\alpha x + (1 - \alpha) z) \leq \alpha f(x) + (1 - \alpha) f(z).
+	\end{equation}
+	The function $-f$ is convex iff $f$ is concave.
+	A function that is both convex and concave is affine (linear plus a constant).
+\end{defn}
+
+Convexity does not require differentiability ($\norm{\cdot}_1$ is convex but not $C^1$).
+When derivatives exist, equivalent characterizations emerge at each regularity level:
+
+\begin{itemize}
+	\item $f \in C^1$ convex $\;\Leftrightarrow\;$ $\nabla f$ is monotone: $\inner{\nabla f(z) - \nabla f(x), z - x} \geq 0$ for all $x, z$.
+	\item $f \in C^1$ convex $\;\Leftrightarrow\;$ $f(z) \geq f(x) + \inner{\nabla f(x), z - x}$ for all $z$.
+		Geometrically: the first-order model is a global underestimator, and the epigraph of $L_x$ contains the epigraph of $f$.
+		A direct consequence: $\nabla f(x) = 0 \Leftrightarrow x$ is a global minimum.
+	\item $f \in C^2$ convex $\;\Leftrightarrow\;$ $\nabla^2 f(x) \succeq 0$ for all $x$.
+		For quadratics, $f$ convex iff $Q \succeq 0$.
+	\item $f \in C^2$ with $\nabla^2 f(x) \succeq \tau I$ ($\tau > 0$): the best case for optimization.
+\end{itemize}
+
+The first-order characterization is especially powerful.
+It says that a convex function always lies above its tangent planes.
+When $\nabla f(x) = 0$, the tangent plane is horizontal, so $f(z) \geq f(x)$ for all $z$ --- global optimality from a purely local condition.
+
+Sometimes the best way to prove a function is convex is \textit{by construction}: build it from known convex pieces using operations that preserve convexity.
+
+\paragraph{Convexity-preserving operations}
+
+\begin{enumerate}
+	\item \textit{Non-negative combination:} $f, g$ convex, $\delta, \beta \geq 0$ $\Rightarrow$ $\delta f + \beta g$ convex.
+	\item \textit{Pointwise supremum:} $\{f_i\}_{i \in I}$ convex (possibly infinitely many) $\Rightarrow$ $\sup_i f_i$ convex.
+	\item \textit{Affine substitution:} $f$ convex $\Rightarrow$ $f(Ax + b)$ convex for any matrix $A$ and vector $b$.
+	\item \textit{Composition with increasing convex function:} $f$ convex, $g \colon \R \to \R$ convex and nondecreasing $\Rightarrow$ $g \circ f$ convex.
+	\item \textit{Infimal convolution:} $f_1, f_2$ convex $\Rightarrow$ $f(x) = \inf\{f_1(x_1) + f_2(x_2) : x_1 + x_2 = x\}$ convex.
+	\item \textit{Image under linear map:} $g$ convex $\Rightarrow$ $f(x) = \inf\{g(z) : Az = x\}$ convex.
+	\item \textit{Partial minimization:} $g(x, z)$ convex $\Rightarrow$ $f(x) = \inf_z g(x, z)$ convex.
+	\item \textit{Perspective:} $f(x)$ convex $\Rightarrow$ $p(x, u) = u\, f(x/u)$ convex for $u > 0$.
+\end{enumerate}
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Quasi-convexity}\label{ssec:quasiconvex}
+
+In one dimension, unimodality sufficed for local methods to work.
+The multivariate generalization is quasi-convexity.
+
+\begin{defn}[Quasi-convex function]\label{def:quasiconvex}
+	A function $f$ is \textit{quasi-convex} if for all $x, z$ and $\alpha \in [0,1]$,
+	\begin{equation}\label{eq:quasiconvexity}
+		f(\alpha x + (1 - \alpha) z) \leq \max\{f(x),\, f(z)\}.
+	\end{equation}
+	Equivalently, all sublevel sets $S(f, \ell) = \{x : f(x) \leq \ell\}$ are convex.
+	In one dimension, quasi-convexity is the same as unimodality.
+\end{defn}
+
+Every convex function is quasi-convex (the sublevel sets of a convex function are convex), but not vice versa.
+The key consequence is the same: a quasi-convex function cannot have local minima that are not global.
+
+The algebra of quasi-convex functions is weaker than convex.
+Positive scaling preserves quasi-convexity ($f$ quasi-convex and $\delta \geq 0$ $\Rightarrow$ $\delta f$ quasi-convex), but the sum of two quasi-convex functions is \emph{not} necessarily quasi-convex --- unlike the convex case.
+There is no ``disciplined quasi-convex programming'' toolkit analogous to the convex one \cite{boyd2008}.
+
+And yet, quasi-convexity arises more often than one might expect.
+Neural network loss landscapes, while nonconvex, often exhibit approximate quasi-convexity --- a single basin dominates, and local methods find it reliably.
+
+
+% ────────────────────────────────────────────────────────────────
+\subsection{Strong Convexity and Smoothness}\label{ssec:strong-convex}
+
+Plain convexity says the function curves upward, but not \emph{how much}.
+Strong convexity quantifies a minimum curvature; smoothness quantifies a maximum one.
+Together they bracket the Hessian and determine convergence rates.
+
+\begin{defn}[Strong convexity]\label{def:strong-convex}
+	A function $f$ is \textit{$\tau$-strongly convex} (with modulus $\tau > 0$) if $f(x) - \frac{\tau}{2}\norm{x}^2$ is convex.
+	Equivalent characterizations:
+	\begin{itemize}
+		\item $C^0$: $\alpha f(x) + (1 - \alpha)f(z) \geq f(\alpha x + (1 - \alpha)z) + \frac{\tau}{2}\alpha(1 - \alpha)\norm{z - x}^2$.
+		\item $C^1$: $f(z) \geq f(x) + \inner{\nabla f(x), z - x} + \frac{\tau}{2}\norm{z - x}^2$.
+		\item $C^2$: $\nabla^2 f(x) \succeq \tau I$ for all $x$.
+	\end{itemize}
+\end{defn}
+
+Strong convexity guarantees a unique global minimum and provides a quadratic lower bound on $f$ around any point.
+The larger $\tau$, the steeper the ``bowl'' and the easier the optimization.
+
+\begin{defn}[$L$-smoothness]\label{def:L-smooth}
+	A differentiable function $f$ is \textit{$L$-smooth} if its gradient is Lipschitz continuous:
+	\begin{equation}\label{eq:L-smoothness}
+		\norm{\nabla f(x) - \nabla f(z)} \leq L\norm{x - z} \qquad \forall\, x, z.
+	\end{equation}
+	For $f \in C^2$, this is equivalent to $\nabla^2 f(x) \preceq LI$ for all $x$ (and $\nabla^2 f(x) \succeq -LI$ in the non-convex case).
+\end{defn}
+
+$L$-smoothness provides a quadratic upper bound: the function cannot curve too sharply.
+Algorithmically, it guarantees that a step of size $1/L$ in the negative gradient direction always decreases $f$ --- the foundation of fixed-stepsize gradient methods.
+
+\begin{thm}[Joint characterization]\label{thm:hessian-bounds}
+	If $f \in C^2$ is both $L$-smooth and $\tau$-strongly convex, the eigenvalues of the Hessian are uniformly bounded:
+	\begin{equation}\label{eq:hessian-bounds}
+		\tau I \preceq \nabla^2 f(x) \preceq LI
+		\qquad \Longleftrightarrow \qquad
+		0 < \tau \leq \lambda_n(x) \leq \lambda_1(x) \leq L.
+	\end{equation}
+	The ratio $\kappa = L / \tau$ is the \textit{condition number} of the problem.
+	It plays the same role for general smooth objectives as $\kappa(Q) = \lambda_1 / \lambda_n$ does for quadratics: gradient methods converge at a rate that depends on $\kappa$.
+\end{thm}
+
+When $\kappa = 1$, the Hessian is a multiple of the identity everywhere --- the function is ``isotropic'' and gradient descent converges in one step.
+When $\kappa \gg 1$, the function is ill-conditioned: some directions are much steeper than others, and gradient methods zig-zag.
+The condition number is the single most important quantity governing the speed of first-order optimization.
+
+We now have all the theory needed.
+The next sections put it to work: \Cref{sec:quadratic-methods} develops gradient and conjugate gradient methods for quadratic objectives, where the theory is cleanest; \Cref{sec:smooth-methods} extends everything to general smooth functions.
