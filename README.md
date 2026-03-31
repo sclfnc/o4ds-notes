@@ -2,13 +2,9 @@
 
 **Academic Year:** 2024–2025
 
-Lecture notes on optimization theory and algorithms for Optimization for Data Science at University of Pisa. Topics include convexity, gradient methods, nonsmooth
-optimization, duality, and constrained algorithms.
+Lecture notes on optimization theory and algorithms for Optimization for Data Science at University of Pisa. Topics include convexity, gradient methods, nonsmooth optimization, duality, and constrained algorithms.
 
-> ⚠️ **Disclaimer:** These notes are my personal interpretation of the course
-> slides and lectures. They may contain errors, omissions, or inaccuracies.
-> They are not an official course resource and should not be treated as a
-> substitute for the original material. Use them at your own risk.
+> ⚠️ **Disclaimer:** These notes are my personal interpretation of the course slides and lectures. They **surely** contain errors, omissions, or inaccuracies (they were written as a study support after understanding all topics, not as a starting point — please keep this in mind if you use them). They are not an official course resource and should not be treated as a substitute for the original material. Use them at your own risk.
 
 ---
 
@@ -45,8 +41,7 @@ Active set, projected gradient, Frank–Wolfe, dual methods, barrier methods, pr
 
 ## 📄 Compiled PDF
 
-A pre-compiled version is available as `Optimization4DS.pdf` in the
-repository root.
+A pre-compiled version is available as `Optimization4DS.pdf` in the repository root.
 
 ---
 
