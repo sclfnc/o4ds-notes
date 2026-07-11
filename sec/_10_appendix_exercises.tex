@@ -1,0 +1,650 @@
+\appendix
+\section{Exercises}\label{app:exercises}
+
+\subsection{Foundations and Quadratic Forms}\label{app:ex-foundations}
+
+\begin{exercise}[\Cref{sec:solution-quality}]{Fixing the relative gap}\label{ex:relative-gap}
+	The relative gap $R(x) = A(x)/|f^*|$ is ill-defined when $f^* = 0$.
+	Propose at least two fixes and justify which one is more reliable in practice.
+\end{exercise}
+
+\solution
+Two natural candidates:
+\begin{itemize}
+	\item \textit{Fix 1, threshold denominator:} replace $|f^*|$ with $\max\{|f^*|, 1\}$.
+		This is simple to implement but introduces an arbitrary scale.
+		When $f^*$ lies in the range $10^{-3}$, the denominator jumps from $10^{-3}$ to $1$, making $R(x)$ appear much smaller than the true relative error.
+		The threshold $1$ has no intrinsic meaning: it just happens to be a convenient default.
+	\item \textit{Fix 2, symmetric denominator:} define $R(x) = A(x) / \max\{|f(x)|, |f^*|\}$.
+		This is scale-invariant by construction: replacing $f$ by $\alpha f$ (for any $\alpha > 0$) leaves $R$ unchanged.
+		When $f^* \approx 0$, the denominator is at least $|f(x)|$, which is positive unless $x$ is already optimal.
+		The formula degrades gracefully and does not depend on an arbitrary constant.
+\end{itemize}
+Fix 2, or a close variant that divides by the incumbent $|f(x)|$ with a small additive constant, is the standard choice in optimization software (CPLEX, Gurobi).
+The key insight: a good relative measure should be dimensionless and invariant under positive rescaling of $f$.
+
+\begin{exercise}[\Cref{def:lipschitz}]{Locally but not globally Lipschitz}\label{ex:lipschitz-not-global}
+	Show that $f(x) = x^2$ is locally Lipschitz at every $x$ but not globally Lipschitz on $\R$.
+\end{exercise}
+
+\solution
+\textit{Local Lipschitz at any $x_0$.}
+Fix $x_0 \in \R$ and take $\delta > 0$.
+For any $x, z \in [x_0 - \delta, x_0 + \delta]$:
+\begin{equation}\label{eq:ex-local-lip}
+	|f(x) - f(z)| = |x^2 - z^2| = |x + z| \cdot |x - z| \leq (2|x_0| + 2\delta) \cdot |x - z|.
+\end{equation}
+So $f$ is Lipschitz on $[x_0 - \delta, x_0 + \delta]$ with constant $L = 2|x_0| + 2\delta$.
+This $L$ is finite for every fixed $x_0$ and $\delta$: the definition of locally Lipschitz.
+
+\textit{Not globally Lipschitz.}
+The constant $L$ depends on $x_0$ and grows without bound as $|x_0| \to \infty$.
+No single $L$ works for all of $\R$.
+An equivalent argument via derivatives: $f'(x) = 2x$ is unbounded on $\R$.
+If $f$ were globally $L$-Lipschitz, the mean value theorem would give $|f'(x)| \leq L$ for all $x$, which fails since $|f'(x)| = 2|x| \to \infty$.
+The relationship between Lipschitz constants and derivatives is developed in \Cref{sec:derivatives}.
+
+\begin{exercise}[\Cref{sec:lipschitz}, \Cref{sec:derivatives}]{Continuous but not Lipschitz}\label{ex:continuous-not-lipschitz}
+	Find a function that is continuous on $[-1, 1]$ but not Lipschitz there.
+	Why does this not contradict the extreme value theorem?
+\end{exercise}
+
+\solution
+Take $f(x) = \sqrt{|x|}$.
+This function is continuous on $[-1, 1]$ (composition of continuous functions).
+Near $x = 0$:
+\begin{equation}\label{eq:ex-sqrt-ratio}
+	\frac{|f(x) - f(0)|}{|x - 0|} = \frac{\sqrt{|x|}}{|x|} = \frac{1}{\sqrt{|x|}} \to \infty \quad \text{as } x \to 0.
+\end{equation}
+No finite $L$ bounds this ratio, so $f$ is not Lipschitz on any interval containing the origin.
+
+\textit{Why no contradiction with the extreme value theorem?}
+The extreme value theorem guarantees that $f$ attains its maximum and minimum on a closed bounded interval; it says nothing about the rate of change or the existence of a Lipschitz constant.
+In fact, $f \in C^0[-1,1]$ but $f \notin C^1[-1,1]$, because $|f'(x)| = 1/(2\sqrt{|x|}) \to \infty$ as $x \to 0$ (and $f'(0)$ does not exist).
+
+The precise chain of implications is: $f \in C^1$ on a compact interval $\Rightarrow$ $f$ globally Lipschitz there (since $|f'|$ is bounded by the extreme value theorem). But $C^0 \not\Rightarrow$ Lipschitz, and Lipschitz $\not\Rightarrow$ $C^1$.
+
+\begin{exercise}[\Cref{sec:spectral-decomp}, \Cref{sec:level-sets}, \Cref{def:kappa}]{Full spectral analysis of a $2 \times 2$ matrix}\label{ex:eigenvalues-2x2}
+	Let $Q = \bigl[\begin{smallmatrix} 5 & 3 \\ 3 & 5 \end{smallmatrix}\bigr]$.
+	Find eigenvalues, eigenvectors, the decomposition $Q = H\Lambda H^T$, and the condition number $\kappa$.
+	Sketch the level sets of $f(x) = \frac{1}{2} x^T Q x$.
+\end{exercise}
+
+\solution
+\textit{Eigenvalues.}
+The characteristic polynomial is $\det(Q - \lambda I) = (5 - \lambda)^2 - 9 = \lambda^2 - 10\lambda + 16 = 0$.
+The roots are $\lambda_1 = 8$ and $\lambda_2 = 2$.
+
+\textit{Eigenvectors.}
+For $\lambda_1 = 8$: $(Q - 8I)v = 0$ gives $-3v_1 + 3v_2 = 0$, so $v_1 = v_2$.
+Normalized: $H_1 = \frac{1}{\sqrt{2}}[1, 1]^T$.
+For $\lambda_2 = 2$: $(Q - 2I)v = 0$ gives $3v_1 + 3v_2 = 0$, so $v_1 = -v_2$.
+Normalized: $H_2 = \frac{1}{\sqrt{2}}[-1, 1]^T$.
+
+\textit{Decomposition.}
+$H = \frac{1}{\sqrt{2}}\bigl[\begin{smallmatrix} 1 & -1 \\ 1 & 1 \end{smallmatrix}\bigr]$, $\Lambda = \diag(8, 2)$, and $Q = H\Lambda H^T$.
+
+\textit{Condition number.}
+$\kappa = \lambda_1 / \lambda_2 = 8/2 = 4$.
+
+\textit{Level sets.}
+The level set $L(f, v)$ is an ellipse centered at the origin with axes along $H_1$ and $H_2$ (rotated $45^\circ$ from the coordinate axes).
+The semi-axis length in the $H_i$-direction is $\sqrt{2v / \lambda_i}$.
+Along $H_1$ (large eigenvalue $\lambda_1 = 8$): shorter axis $\sqrt{2v/8} = \sqrt{v/4}$.
+Along $H_2$ (small eigenvalue $\lambda_2 = 2$): longer axis $\sqrt{2v/2} = \sqrt{v}$.
+The ratio of semi-axes is $\sqrt{\lambda_1/\lambda_2} = \sqrt{4} = 2$: the ellipse is twice as long in the $H_2$-direction as in the $H_1$-direction.
+
+\begin{exercise}[\Cref{sec:linear-functions}]{Characterizing linear functions}\label{ex:linear-characterization}
+	A function $f \colon \R^n \to \R$ satisfies $f(\gamma x) = \gamma f(x)$ for all $\gamma > 0$ and $f(x + z) = f(x) + f(z)$ for all $x, z$.
+	Prove that $f(x) = \inner{b, x}$ for some $b \in \R^n$.
+	Does this extend to affine functions $f(x) = \inner{b, x} + c$?
+\end{exercise}
+
+\solution
+\textit{Construction of $b$.}
+Let $u^1, \dots, u^n$ be the canonical basis vectors (\Cref{sec:matrices}).
+Define $b_i = f(u^i)$ for each $i$.
+Any $x \in \R^n$ decomposes as $x = \sum_{i=1}^n x_i u^i$.
+By additivity (applied $n - 1$ times):
+$f(x) = f\bigl(\sum_i x_i u^i\bigr) = \sum_{i=1}^n f(x_i u^i)$.
+By homogeneity: $f(x_i u^i) = x_i f(u^i) = x_i b_i$ (this requires extending homogeneity to all $\gamma \in \R$, which follows from additivity: $f(0) = f(0 + 0) = 2f(0)$ forces $f(0) = 0$, and $0 = f(x + (-x)) = f(x) + f(-x)$ gives $f(-x) = -f(x)$).
+Therefore $f(x) = \sum_i b_i x_i = \inner{b, x}$.
+
+\textit{Affine functions.}
+If $f(0) = c \neq 0$, homogeneity fails: $f(0) = f(\gamma \cdot 0) = \gamma f(0) = \gamma c$ for all $\gamma > 0$, which is impossible unless $c = 0$.
+So the characterization applies only to linear functions, not affine ones.
+An affine function $f(x) = \inner{b, x} + c$ with $c \neq 0$ satisfies additivity up to a constant ($f(x + z) = f(x) + f(z) - c$) but violates homogeneity.
+
+\begin{exercise}[\Cref{sec:quad-univariate}]{Anatomy of a univariate quadratic}\label{ex:quadratic-roots}
+	For $f(x) = ax^2 + bx + c$ with $a > 0$, express the center $\bar{x}$, the minimum value $f(\bar{x})$, and the roots of $f$ in terms of $a, b, c$.
+	Discuss what happens when the discriminant $\Delta = b^2 - 4ac$ is positive, zero, or negative.
+\end{exercise}
+
+\solution
+\textit{Center and minimum.}
+By \cref{eq:completing-square-univariate}: $\bar{x} = -b/(2a)$ and $f(\bar{x}) = c - b^2/(4a) = -\Delta/(4a)$.
+
+\textit{Roots.}
+Setting $f(x) = 0$ and applying the quadratic formula: $x = \bar{x} \pm \sqrt{\Delta}/(2a)$ when $\Delta \geq 0$.
+
+\textit{Three cases.}
+\begin{itemize}
+	\item $\Delta > 0$: two distinct real roots, $f(\bar{x}) = -\Delta/(4a) < 0$.
+		The parabola dips below zero between the roots.
+	\item $\Delta = 0$: one double root at $\bar{x}$, $f(\bar{x}) = 0$.
+		The parabola touches the $x$-axis exactly at its vertex.
+	\item $\Delta < 0$: no real roots, $f(\bar{x}) = -\Delta/(4a) > 0$.
+		The parabola stays strictly positive everywhere.
+\end{itemize}
+For optimization, the discriminant is irrelevant: regardless of $\Delta$, the minimum is always at $\bar{x}$ with value $-\Delta/(4a)$.
+The roots matter for feasibility questions (is $f(x) \leq 0$ achievable?) but not for finding the optimum.
+
+\subsection{Univariate Optimization}\label{app:ex-univariate}
+
+\begin{exercise}[\Cref{sec:golden-ratio}]{Golden ratio vs.\ naive bisection}\label{ex:golden-complexity}
+	Derive the iteration count $k \geq \log(D/\delta) / \log(1/r)$ for GRS with $r = (\sqrt{5}-1)/2 \approx 0.618$.
+	Compare with naive bisection ($r = 0.5$, two evaluations per step) for $D/\delta = 10^6$.
+\end{exercise}
+
+\solution
+\textit{Derivation.}
+After $k$ iterations the interval has width $D r^k$.
+We need $D r^k \leq \delta$, i.e., $r^k \leq \delta/D$, i.e.,
+\begin{equation}\label{eq:ex-grs-count}
+	k \geq \frac{\log(D/\delta)}{\log(1/r)} = \frac{\log(D/\delta)}{-\log r}.
+\end{equation}
+
+\textit{GRS.}
+Taking natural logs, $-\ln(0.618) \approx 0.481$, so $k \geq \ln(D/\delta) / 0.481 \approx 2.078 \ln(D/\delta)$.
+For $D/\delta = 10^6$: $k \geq 2.078 \times \ln(10^6) = 2.078 \times 13.82 \approx 29$ iterations.
+Each iteration uses 1 function evaluation (after the initial 2), so total evaluations $\approx 31$.
+
+\textit{Naive bisection.}
+With $r = 0.5$: $k \geq \log(10^6)/\log(2) \approx 20$ iterations, but each requires 2 evaluations (neither test point carries over), giving $40$ total evaluations.
+
+\textit{Comparison.}
+GRS wins: 31 vs.\ 40 evaluations. The reuse trick is why GRS beats bisection on evaluations: the golden ratio is the unique $r$ for which a test point carries over ($r^2 = 1 - r$), cutting the cost to one evaluation per iteration. Optimality among methods that use only function values is the stronger, separate result cited in \Cref{sec:golden-ratio}.
+
+\begin{exercise}[\Cref{sec:dichotomic}]{When exponential expansion fails}\label{ex:ds-counterexample}
+	The bracket-finding procedure tries $x_+ = 2, 4, 8, 16, \dots$ and stops when $f'(x_+) > 0$.
+	Construct a $C^\infty$ function with infinitely many local minima such that the procedure never stops.
+\end{exercise}
+
+\solution
+Take $f(x) = \sin(\pi x + 3\pi/4)$.
+Then $f'(x) = \pi\cos(\pi x + 3\pi/4)$.
+At the test points $x = 2^i$ for $i \geq 1$ (that is, $2, 4, 8, \dots$, all even):
+\begin{equation}\label{eq:ex-sin-deriv}
+	f'(2^i) = \pi\cos(\pi \cdot 2^i + 3\pi/4) = \pi\cos(2^i\pi + 3\pi/4) = \pi\cos(3\pi/4) = -\frac{\pi\sqrt{2}}{2} \approx -2.22,
+\end{equation}
+where the second equality uses $\cos(\theta + 2k\pi) = \cos(\theta)$ for any integer $k$, and $2^i\pi$ (for $i \geq 1$) is always an even multiple of $\pi$.
+The derivative is negative at \emph{every} test point, so the bracket is never found, even though $f$ has local minima at $x = 2k + 3/4$ for $k \in \Z$ (where $f = -1$).
+
+The failure is fragile: shifting the phase constant by a small $\varepsilon$, or changing the doubling factor from $2$ to $2.1$, would break the counterexample.
+This illustrates why the exponential expansion ``works in practice for all reasonable functions'' but has no worst-case guarantee without a coercivity assumption on $f$.
+
+\begin{exercise}[\Cref{sec:quad-interpolation}]{The map is not the world}\label{ex:safeguard-sigma}
+	In quadratic interpolation the model predicts $x = x_- + 0.02(x_+ - x_-)$, nearly at the left boundary.
+	With safeguard $\sigma = 0.1$, what point is actually used?
+	If the model is consistently wrong, what convergence rate results?
+\end{exercise}
+
+\solution
+\textit{Clamping.}
+The safeguard from \cref{eq:safeguard-clamping} enforces $x \in [x_- + \sigma D, \, x_+ - \sigma D]$ where $D = x_+ - x_-$.
+Since the model's prediction $0.02 D$ falls below the lower guard $0.1 D$, the clamped point is $x_- + 0.1 D$.
+
+\textit{Worst-case rate.}
+If the model is consistently wrong (always clamped), each iteration shrinks the interval by at most a factor $1 - \sigma = 0.9$.
+This gives linear convergence with rate $r = 1 - \sigma = 0.9$: slow (about $22$ iterations per digit of accuracy), but guaranteed to converge.
+
+\textit{Best-case rate.}
+When the model is accurate, the interpolation estimate falls well inside $[\sigma D, (1-\sigma)D]$ and the safeguard never activates.
+Convergence is then superlinear with order $p = (1 + \sqrt{5})/2 \approx 1.618$ (\Cref{thm:secant-conv}).
+The safeguard is a safety net, not a brake: it only activates when the quadratic model is unreliable.
+
+\subsection{Optimality and Convexity}\label{app:ex-optimality}
+
+\begin{exercise}[\Cref{sec:convexity}, \Cref{sec:quasiconvex}]{Convex implies quasi-convex, but not vice versa}\label{ex:convex-implies-quasiconvex}
+	Prove the implication and give a counterexample for the reverse.
+\end{exercise}
+
+\solution
+\textit{Forward implication.}
+Let $f$ be convex.
+For any $x, z$ and $\alpha \in [0, 1]$:
+$f(\alpha x + (1-\alpha)z) \leq \alpha f(x) + (1-\alpha)f(z)$.
+A convex combination of two real numbers is at most their maximum: $\alpha a + (1-\alpha)b \leq \max\{a, b\}$ for $\alpha \in [0,1]$ (since $\alpha a + (1-\alpha)b \leq \alpha \max\{a,b\} + (1-\alpha)\max\{a,b\} = \max\{a,b\}$).
+Chaining the two inequalities:
+$f(\alpha x + (1-\alpha)z) \leq \max\{f(x), f(z)\}$,
+which is exactly the quasi-convexity condition from \Cref{def:quasiconvex}.
+
+\textit{Counterexample for the reverse.}
+Take $f(x) = -e^{-x^2}$.
+This function is unimodal on $\R$ with a unique minimum at $x = 0$, so it is quasi-convex (its sublevel sets $\{x : f(x) \leq \ell\}$ are intervals, which are convex).
+But $f''(x) = (2 - 4x^2)e^{-x^2}$ is negative for $|x| > 1/\sqrt{2}$: at $x = 1$, for instance, $f''(1) = -2e^{-1} < 0$, so $f$ is concave in the tails.
+This violates the second-order characterization of convexity ($f \in C^2$ convex $\Leftrightarrow$ $f''(x) \geq 0$ for all $x$; see \Cref{sec:convexity}).
+The function bends downward away from the origin while its sublevel sets stay intervals: the two notions genuinely differ.
+
+\begin{exercise}[\Cref{def:convex}]{Epigraph characterization of convexity}\label{ex:epigraph-convex}
+	Prove: $\epi(f) = \{(v, x) : v \geq f(x)\}$ is convex if and only if $f$ is convex.
+\end{exercise}
+
+\solution
+\textit{($\Rightarrow$) Convex epigraph implies convex function.}
+Take any $x_1, x_2 \in \R^n$ and $\alpha \in [0, 1]$.
+The points $(f(x_1), x_1)$ and $(f(x_2), x_2)$ lie in $\epi(f)$ (with equality $v = f(x)$).
+If $\epi(f)$ is convex, their convex combination also lies in $\epi(f)$:
+$\bigl(\alpha f(x_1) + (1-\alpha) f(x_2),\; \alpha x_1 + (1-\alpha) x_2\bigr) \in \epi(f)$.
+By definition of the epigraph, this means
+$\alpha f(x_1) + (1-\alpha) f(x_2) \geq f(\alpha x_1 + (1-\alpha) x_2)$,
+which is the convexity condition for $f$.
+
+\textit{($\Leftarrow$) Convex function implies convex epigraph.}
+Take any $(v_1, x_1), (v_2, x_2) \in \epi(f)$ and $\alpha \in [0, 1]$, so $v_1 \geq f(x_1)$ and $v_2 \geq f(x_2)$.
+By convexity of $f$:
+$f(\alpha x_1 + (1-\alpha)x_2) \leq \alpha f(x_1) + (1-\alpha)f(x_2) \leq \alpha v_1 + (1-\alpha)v_2$.
+Therefore $(\alpha v_1 + (1-\alpha)v_2,\; \alpha x_1 + (1-\alpha)x_2) \in \epi(f)$, confirming convexity of $\epi(f)$.
+
+\begin{exercise}[\Cref{def:strong-convex}]{Gradient norm bounds the gap}\label{ex:strong-convex-gap}
+	If $f$ is $\tau$-strongly convex, prove $\norm{\nabla f(x)}^2 \geq 2\tau(f(x) - f^*)$.
+	Why does this fail for merely convex functions?
+\end{exercise}
+
+\solution
+\textit{Proof.}
+The $C^1$ characterization of $\tau$-strong convexity (\Cref{def:strong-convex}), evaluated at $z = x^*$, gives:
+\begin{equation}\label{eq:ex-strong-gap-start}
+	f(x^*) \geq f(x) + \inner{\nabla f(x), x^* - x} + \frac{\tau}{2}\norm{x^* - x}^2.
+\end{equation}
+Rearranging: $f(x) - f(x^*) \leq -\inner{\nabla f(x), x^* - x} - \frac{\tau}{2}\norm{x^* - x}^2$.
+The right-hand side is a concave quadratic in $w = x^* - x$.
+To find the tightest bound, maximize over $w$: setting the gradient to zero gives $-\nabla f(x) - \tau w = 0$, i.e., $w = -\nabla f(x)/\tau$.
+Substituting back:
+\begin{equation}\label{eq:ex-strong-gap-result}
+	f(x) - f^* \leq \frac{\norm{\nabla f(x)}^2}{\tau} - \frac{\tau}{2} \cdot \frac{\norm{\nabla f(x)}^2}{\tau^2} = \frac{\norm{\nabla f(x)}^2}{2\tau}.
+\end{equation}
+Rearranging: $\norm{\nabla f(x)}^2 \geq 2\tau(f(x) - f^*)$.
+
+\textit{Why this fails without strong convexity.}
+When $\tau = 0$, the bound degenerates to $f(x) - f^* \leq +\infty$, which is vacuous.
+A concrete example: $f(x) = |x|$ is convex with $\norm{g} = 1$ for all $x \neq 0$ (every subgradient has unit norm), yet $f(x) - f^* = |x|$ can be arbitrarily large.
+The gradient norm is bounded but the gap is unbounded: without the quadratic ``bowl'' guaranteed by strong convexity, the gradient says nothing about how far we are from the optimum.
+
+\begin{exercise}[\Cref{sec:grad-hess}, \Cref{sec:derivatives}]{Finite differences vs.\ autodiff}\label{ex:finite-diff-cost}
+	Approximating $\nabla f(x) \in \R^n$ by forward finite differences costs $n + 1$ evaluations of $f$.
+	Automatic differentiation costs $\sim 3$--$5$ times one evaluation.
+	For what $n$ does the difference matter?
+\end{exercise}
+
+\solution
+\textit{Cost comparison.}
+Let $C_f$ denote the cost of one evaluation of $f$.
+\begin{itemize}
+	\item \textit{Forward finite differences:} approximate $\partial f / \partial x_i \approx (f(x + h e_i) - f(x)) / h$ for each $i$. Total: $(n + 1) C_f$ (one base evaluation plus $n$ perturbed evaluations).
+	\item \textit{Reverse-mode autodiff:} propagate gradients backward through the computation graph. Total: $\sim 4 C_f$, independent of $n$ (the constant depends on implementation overhead but not on the number of variables).
+\end{itemize}
+Break-even occurs at $n \approx 3$.
+
+\textit{Scaling.}
+For $n = 100$: finite differences cost $101 C_f$, autodiff costs $\sim 4 C_f$: a $25\times$ speedup.
+For $n = 10^6$ (a moderate neural network): the ratio is $250{,}000\times$.
+Central differences ($(f(x + he_i) - f(x - he_i))/(2h)$, better accuracy) use $2n$ evaluations, making the gap even wider.
+
+This is why every modern deep learning framework (PyTorch, JAX, TensorFlow) uses reverse-mode automatic differentiation.
+The $\mathcal{O}(1)$-in-$n$ cost of autodiff is what makes gradient-based optimization practical for problems with millions of parameters.
+
+\subsection{Gradient Methods for Quadratics}\label{app:ex-quadratic}
+
+\begin{exercise}[\Cref{thm:kantorovich}, \Cref{thm:cg-conv}]{Condition number in action}\label{ex:kappa-1000}
+	For $\kappa(Q) = 1000$, compute the contraction rates and iteration counts for steepest descent and conjugate gradient to reduce the error by a factor of $10^{-6}$.
+\end{exercise}
+
+\solution
+\textit{Steepest descent.}
+By the Kantorovich inequality (\Cref{thm:kantorovich}):
+$r_{\mathrm{SD}} = \bigl((\kappa - 1)/(\kappa + 1)\bigr)^2 = (999/1001)^2 \approx 0.99601$.
+
+\textit{Conjugate gradient.}
+By \Cref{thm:cg-conv}:
+$r_{\mathrm{CG}} = (\sqrt{\kappa} - 1)/(\sqrt{\kappa} + 1) = (31.62 - 1)/(31.62 + 1) \approx 0.9387$.
+
+\textit{Iteration counts.}
+We need $r^k \leq 10^{-6}$, i.e., $k \geq 6\ln 10 / (-\ln r)$:
+\begin{itemize}
+	\item SD: $k \geq 13.82 / 0.00400 \approx 3{,}455$ iterations.
+	\item CG: $k \geq 13.82 / 0.0632 \approx 219$ iterations.
+\end{itemize}
+CG is roughly $16\times$ faster in iterations, and the per-iteration cost is nearly the same ($\mathcal{O}(n^2)$, dominated by one matrix--vector product).
+For $\kappa = 10^6$, the gap widens to $\sim 500\times$: CG's $\sqrt{\kappa}$-dependence is dramatically better than SD's $\kappa$-dependence.
+
+\begin{exercise}[\Cref{thm:cg-eigen-conv}]{CG exploits eigenvalue clustering}\label{ex:cg-few-eigenvalues}
+	Let $Q = \diag(1, 1, 1, 1, 100)$: four eigenvalues equal to $1$ and one equal to $100$.
+	How many CG iterations are needed for exact convergence (in exact arithmetic)?
+	What if $Q = \diag(1, 1.01, 0.99, 1.02, 100)$?
+\end{exercise}
+
+\solution
+\textit{Exact case.}
+$Q$ has only 2 distinct eigenvalues ($1$ and $100$).
+By \Cref{thm:cg-eigen-conv}, CG terminates in at most 2 iterations, regardless of $n = 5$.
+The method ``sees'' only the number of distinct eigenvalues, not the matrix size.
+
+\textit{Perturbed case.}
+Now $Q$ has 5 distinct eigenvalues: $0.99, 1, 1.01, 1.02, 100$.
+The formal bound says at most 5 iterations.
+But the eigenvalue-dependent bound from \Cref{thm:cg-eigen-conv} is much tighter.
+After $k = 2$ steps, the ``effective'' $\lambda_k$ is the second-largest eigenvalue $\lambda_2 = 1.02$, and $\lambda_n = 0.99$.
+The bound gives:
+$r \leq (\lambda_2 - \lambda_n) / (\lambda_2 + \lambda_n) = (1.02 - 0.99)/(1.02 + 0.99) = 0.03/2.01 \approx 0.015$.
+This is nearly zero: in practice, 2--3 iterations suffice because the cluster near $1$ is effectively treated as a single eigenvalue.
+
+This is why CG excels on matrices with a few outlier eigenvalues and the rest clustered: a common pattern in PDE discretizations (where a few modes dominate) and regularized problems (where the regularizer compresses most eigenvalues).
+
+\begin{exercise}[\Cref{sec:steepest-descent}, \Cref{sec:conjugate-gradient}]{Can we get $\varepsilon = 0$?}\label{ex:asymptotic-convergence}
+	Does steepest descent converge to $x^*$ exactly in finite time?
+	What about CG?
+	What breaks in floating-point arithmetic?
+\end{exercise}
+
+\solution
+\textit{Steepest descent.}
+The linear rate $r < 1$ gives $A(x^k) \leq r^k A(x^0)$.
+Since $r^k > 0$ for all finite $k$, steepest descent never reaches $x^*$ exactly; it converges asymptotically.
+The error decreases geometrically but never hits zero.
+
+\textit{CG in exact arithmetic.}
+Finite termination in at most $n$ steps (\Cref{thm:cg-finite}): after $n$ $Q$-conjugate directions, the method has explored all of $\R^n$ and the residual is exactly zero.
+
+\textit{CG in floating point.}
+The $Q$-conjugacy condition $(p^i)^T Q p^j = 0$ for $i \neq j$ degrades: rounding errors accumulate and the directions gradually lose mutual orthogonality.
+After $n$ steps, the error is typically $\sim 10^{-12}$ rather than zero.
+For large $n$, the loss of orthogonality can be severe after far fewer than $n$ steps.
+The standard remedy is periodic restarts: reset $p \gets -g$ every $n$ (or fewer) steps to ``re-anchor'' the conjugate directions.
+This sacrifices finite termination but maintains practical convergence quality.
+
+\subsection{Smooth Optimization}\label{app:ex-smooth}
+
+\begin{exercise}[\Cref{sec:fixed-stepsize}]{Fixed stepsize can diverge}\label{ex:too-large-stepsize}
+	For $f(x) = x^4/4$, show that the fixed stepsize $\bar{\alpha} = 2$ causes oscillation from $x^0 = 1$.
+	What is the correct stepsize near $x = 1$?
+\end{exercise}
+
+\solution
+\textit{Oscillation.}
+$\nabla f(x) = x^3$, so the update is $x^{k+1} = x^k - 2(x^k)^3$.
+Starting at $x^0 = 1$: $x^1 = 1 - 2(1)^3 = -1$, then $x^2 = -1 - 2(-1)^3 = -1 + 2 = 1$, and the cycle $1 \to -1 \to 1 \to \cdots$ repeats indefinitely.
+The iterates oscillate without converging; $f(x^k) = 1/4$ for all $k$.
+
+\textit{Correct stepsize.}
+The Hessian is $f''(x) = 3x^2$, so the local smoothness constant at $x = 1$ is $L_{\text{local}} = f''(1) = 3$.
+The fixed-stepsize convergence guarantee (\Cref{sec:fixed-stepsize}) requires $\bar{\alpha} < 2/L$, giving $\bar{\alpha} < 2/3$ near $x = 1$.
+With $\bar{\alpha} = 2$, we exceed this bound by a factor of $3$.
+
+\textit{Why no global fixed stepsize exists.}
+$f''(x) = 3x^2 \to \infty$ as $|x| \to \infty$, so $f$ is not globally $L$-smooth: no single $L$ bounds the Hessian everywhere.
+A fixed stepsize that works near the origin fails far away, and vice versa.
+Line search is essential for functions without a global Lipschitz gradient.
+
+\begin{exercise}[\Cref{sec:gradient-general}, \Cref{sec:opt-quad-hom}]{Detecting unboundedness}\label{ex:detect-unbounded}
+	Can a gradient descent run detect that $f^* = -\infty$?
+	For quadratics? For general $C^1$ functions?
+\end{exercise}
+
+\solution
+\textit{Quadratics.}
+If $Q$ is indefinite, $\exists\, d$ with $d^T Q d < 0$.
+Along this direction:
+$f(x + \alpha d) = \frac{1}{2}\alpha^2 (d^T Q d) + \alpha \inner{q + Qx, d} + f(x) \to -\infty$ as $\alpha \to +\infty$.
+Both Newton's method and Cholesky factorization (\Cref{sec:cholesky}) can detect indefiniteness directly: a negative pivot during factorization is a constructive certificate that $Q \not\succeq 0$.
+The negative-curvature direction exposed by the factorization (the $d$ with $d^T Q d < 0$ read off from the negative pivot) is exactly the direction of unbounded decrease.
+
+\textit{General $C^1$ functions.}
+No finite-time certificate exists.
+If $f(x^k) \to -\infty$ as $k \to \infty$, we can observe this empirically (function values keep decreasing without bound), but we cannot \emph{prove} $f^* = -\infty$ from finitely many evaluations: the function might eventually turn around.
+In practice, a heuristic diagnostic (e.g., $f(x^k) < -M$ for some large threshold $M$, or $\norm{x^k} \to \infty$ with $f$ still decreasing) signals likely unboundedness, but it remains an empirical observation, not a proof.
+
+\begin{exercise}[\Cref{sec:quasi-newton}]{L-BFGS initialization}\label{ex:bfgs-initial}
+	The initial approximation $B^0 = \gamma I$ with $\gamma = \inner{s, y}/\norm{y}^2$ aims to capture the average curvature.
+	Show that for a quadratic $f(x) = \frac{1}{2} x^T Q x + q^T x$, $\gamma = 1/\bar{\lambda}$ where $\bar{\lambda}$ is a weighted average of eigenvalues.
+	What happens when $\gamma \to 0$ or $\gamma \to \infty$?
+\end{exercise}
+
+\solution
+\textit{Derivation for quadratics.}
+For a quadratic, $y = \nabla f(x^{i+1}) - \nabla f(x^i) = Q(x^{i+1} - x^i) = Qs$.
+Therefore $\inner{s, y} = s^T Q s$ and $\norm{y}^2 = s^T Q^2 s$.
+Expanding $s$ in the eigenbasis $s = \sum_j c_j H_j$:
+\begin{equation}\label{eq:ex-lbfgs-gamma}
+	\gamma = \frac{s^T Q s}{s^T Q^2 s} = \frac{\sum_j c_j^2 \lambda_j}{\sum_j c_j^2 \lambda_j^2}.
+\end{equation}
+Equivalently $\gamma = 1/\bar{\lambda}$, where $\bar{\lambda} = \bigl(\sum_j c_j^2 \lambda_j^2\bigr) / \bigl(\sum_j c_j^2 \lambda_j\bigr)$ is a weighted arithmetic average of the eigenvalues with weights $c_j^2 \lambda_j$.
+If $s$ is aligned with a single eigenvector $H_j$ (i.e., $c_j = 1$, all others zero), then $\bar{\lambda} = \lambda_j$ and $\gamma = 1/\lambda_j$ exactly.
+In general, $\gamma$ lies between $1/\lambda_1$ and $1/\lambda_n$, tilted toward the eigenvalues that $s$ ``sees.''
+
+\textit{Limiting behavior.}
+\begin{itemize}
+	\item $\gamma \to 0$: the approximate inverse Hessian $B^0 = \gamma I$ shrinks to zero. The step $B^0 g = \gamma g$ becomes vanishingly small: the method degrades to very tiny steepest-descent steps and effectively stalls.
+	\item $\gamma \to \infty$: the step $B^0 g = \gamma g$ blows up, causing overshooting and potential divergence. The method trusts the gradient direction far too much.
+\end{itemize}
+The formula auto-calibrates: after the first gradient step, $\gamma$ picks up a scale commensurate with the local curvature, and subsequent L-BFGS corrections refine the approximation.
+
+\subsection{Nonsmooth Optimization}\label{app:ex-nonsmooth}
+
+\begin{exercise}[\Cref{def:subgradient}, \Cref{def:subdifferential}]{Subdifferential of the absolute value}\label{ex:subdiff-abs}
+	Compute $\partial f(x)$ for $f(x) = |x|$ at every $x \in \R$.
+	Verify that $0 \in \partial f(0)$ and interpret this geometrically.
+\end{exercise}
+
+\solution
+\textit{Away from the origin.}
+For $x > 0$: $f$ is differentiable with $f'(x) = 1$, so $\partial f(x) = \{1\}$.
+For $x < 0$: $f'(x) = -1$, so $\partial f(x) = \{-1\}$.
+
+\textit{At the origin.}
+We need all $g \in \R$ such that $|z| \geq |0| + g \cdot z = gz$ for all $z \in \R$.
+Testing $z > 0$: need $z \geq gz$, i.e., $g \leq 1$.
+Testing $z < 0$: need $-z \geq gz$, i.e., $g \geq -1$.
+So $\partial f(0) = [-1, 1]$.
+
+\textit{Optimality.}
+Since $0 \in [-1, 1] = \partial f(0)$, the optimality condition $0 \in \partial f(x)$ is satisfied at $x = 0$, confirming it as the global minimum.
+
+\textit{Geometric interpretation.}
+At $x = 0$, the graph of $|x|$ has a corner.
+A subgradient $g \in [-1, 1]$ defines a supporting line $\ell(z) = gz$ that touches the graph at $z = 0$ and lies entirely below it.
+The family of supporting lines sweeps from slope $-1$ to slope $+1$.
+The horizontal supporting line ($g = 0$) certifies that no direction decreases $f$: the point is optimal.
+
+\begin{exercise}[\Cref{sec:smoothing}]{Smoothing equals the Huber function}\label{ex:smoothing-abs}
+	Construct $f_\mu(x)$ for $f(x) = |x| = \max_{z \in [-1,1]} xz$.
+	Show that the result is the Huber function.
+	Compute $L_\mu$ and verify $f_\mu \to f$ as $\mu \to 0$.
+\end{exercise}
+
+\solution
+\textit{Construction.}
+Following the smoothing framework of \Cref{sec:smoothing},
+\[
+	f_\mu(x) = \max_{z \in [-1,1]}\Bigl\{xz - \tfrac{\mu}{2}z^2\Bigr\}.
+\]
+The unconstrained maximizer of $xz - \frac{\mu}{2}z^2$ is $z^* = x/\mu$, from setting the derivative $x - \mu z = 0$.
+Projecting onto $[-1, 1]$ gives $z^* = \min\{1, \max\{-1, x/\mu\}\}$.
+
+\textit{Two cases.}
+\begin{itemize}
+	\item $|x| \leq \mu$: the unconstrained maximizer $x/\mu$ lies in $[-1, 1]$.
+		Substituting: $f_\mu(x) = x \cdot (x/\mu) - \frac{\mu}{2}(x/\mu)^2 = x^2/(2\mu)$.
+	\item $|x| > \mu$: the maximizer saturates at $z^* = \sign(x)$.
+		Substituting: $f_\mu(x) = |x| - \mu/2$.
+\end{itemize}
+Combining:
+\begin{equation}\label{eq:ex-huber}
+	f_\mu(x) = \begin{cases} x^2/(2\mu) & \text{if } |x| \leq \mu, \\ |x| - \mu/2 & \text{if } |x| > \mu. \end{cases}
+\end{equation}
+This is exactly the Huber function, widely used in robust statistics.
+
+\textit{Smoothness.}
+$\nabla f_\mu(x) = x/\mu$ for $|x| \leq \mu$ and $\sign(x)$ for $|x| > \mu$.
+The gradient is continuous (both branches give $\pm 1$ at $|x| = \mu$) with Lipschitz constant $L_\mu = 1/\mu$.
+
+\textit{Convergence.}
+As $\mu \to 0$: $f_\mu(x) \to |x|$ pointwise (the quadratic region shrinks to a point), and $L_\mu = 1/\mu \to \infty$.
+The smooth approximation becomes arbitrarily close to $f$ but increasingly hard to optimize: this is the smoothing--accuracy trade-off from \Cref{sec:smoothing}.
+
+\begin{exercise}[\Cref{sec:svm-svr}, \Cref{sec:svm-duality}, \Cref{sec:smoothing}]{Three ways to solve SVM}\label{ex:svm-unconstrained}
+	The SVM objective $\frac{1}{2}\norm{w}^2 + C\sum_i \max\{1 - y^i\inner{w, x^i}, 0\}$ is unconstrained but nonsmooth.
+	Discuss three solution strategies and their trade-offs.
+\end{exercise}
+
+\solution
+\textit{(a) Subgradient method on the primal.}
+Apply a subgradient method directly to the nonsmooth objective.
+\begin{itemize}
+	\item \textit{Cost per iteration:} $\mathcal{O}(mn)$ for the full subgradient ($m$ samples, $n$ features); $\mathcal{O}(n)$ with stochastic variants (single-sample minibatch).
+	\item \textit{Convergence:} $\mathcal{O}(1/\varepsilon^2)$ (\Cref{tab:smooth-vs-nonsmooth}), which is slow for high accuracy.
+	\item \textit{Stopping criterion:} unreliable, since $\norm{g}$ small does not guarantee proximity to $f^*$.
+	\item \textit{Verdict:} works well for low-accuracy solutions and scales to very large datasets via stochastic variants (SGD with hinge loss).
+\end{itemize}
+
+\textit{(b) Smooth constrained dual.}
+Introduce slacks and dualize (\Cref{sec:svm-duality}): the dual is a smooth QP in $m$ variables with box constraints $0 \leq \alpha_i \leq C$.
+\begin{itemize}
+	\item \textit{Solver options:} projected gradient, active set, or interior point method (\Cref{sec:constrained-algorithms}).
+	\item \textit{Accuracy:} fully controllable; duality gap provides a certificate.
+	\item \textit{Kernel trick:} the dual depends on inner products $\inner{x^i, x^j}$ only, enabling nonlinear models via kernel substitution without computing the feature map $\varphi$ explicitly.
+	\item \textit{Cost:} forming the kernel matrix is $\mathcal{O}(m^2 n)$; decomposition methods (e.g., libSVM's SMO) avoid this by working on small active subsets.
+	\item \textit{Verdict:} dominant approach for moderate $m$; libSVM-style decomposition is the industry standard.
+\end{itemize}
+
+\textit{(c) Smoothing + accelerated gradient.}
+Replace the hinge loss $\max\{1 - t, 0\}$ with its Huber-smoothed version (\Cref{ex:smoothing-abs} applied to a shifted absolute value); apply the accelerated gradient method (\Cref{sec:accelerated}).
+\begin{itemize}
+	\item \textit{Convergence:} $\mathcal{O}(1/\varepsilon)$, better than (a) by a factor of $1/\varepsilon$.
+	\item \textit{Caveat:} the smoothing parameter $\mu$ interacts with the regularization strength $C$. Small $\mu$ gives better approximation but larger $L_\mu$, forcing smaller steps.
+	\item \textit{Verdict:} theoretically appealing but less practical than (b) for moderate-size problems; useful when $m$ is very large and the dual QP is too expensive.
+\end{itemize}
+
+\textit{Summary.}
+Approach (b) dominates for moderate $m$ via decomposition; approach (a) or stochastic variants dominate for $m > 10^6$ where even forming the kernel matrix is prohibitive.
+Approach (c) occupies a middle ground with better theoretical rates than (a) but more tuning than (b).
+
+\subsection{Constrained Optimization}\label{app:ex-constrained}
+
+\begin{exercise}[\Cref{def:set-classes}]{A set that is neither open nor closed}\label{ex:neither-open-nor-closed}
+	Give examples in $\R$ and $\R^2$.
+\end{exercise}
+
+\solution
+\textit{In $\R$.}
+$S = [0, 1)$.
+Not open: $0 \in S$, but every open interval around $0$ contains negative numbers not in $S$.
+Not closed: the sequence $x_k = 1 - 1/k$ lies in $S$ and converges to $1 \notin S$.
+The set contains part of its boundary ($0$) but not all of it ($1$ is missing).
+
+\textit{In $\R^2$.}
+$S = \{(x, y) : x^2 + y^2 < 1\} \cup \{(1, 0)\}$: the open unit disk plus one boundary point.
+Not open: the point $(1, 0) \in S$ has no open ball entirely inside $S$ (any ball around $(1,0)$ contains points outside the closed disk).
+Not closed: the point $(0, 1)$ is a limit of the sequence $(0, 1 - 1/k) \in S$ but $(0, 1) \notin S$.
+
+\begin{exercise}[\Cref{def:tangent-cone}]{The tangent cone is a cone}\label{ex:tangent-cone-is-cone}
+	Prove: if $d \in T_X(x)$ and $\alpha > 0$, then $\alpha d \in T_X(x)$.
+\end{exercise}
+
+\solution
+By definition of the tangent cone, $d \in T_X(x)$ means there exist sequences $\{z_i\} \to x$ with $z_i \in X$ and $\{t_i\} \to 0$ with $t_i > 0$ such that $(z_i - x)/t_i \to d$.
+
+Define $\tilde{t}_i = t_i / \alpha$.
+Then:
+\begin{itemize}
+	\item $\tilde{t}_i > 0$ (since $t_i > 0$ and $\alpha > 0$).
+	\item $\tilde{t}_i \to 0$ (since $t_i \to 0$ and $\alpha$ is fixed).
+	\item $(z_i - x)/\tilde{t}_i = \alpha \cdot (z_i - x)/t_i \to \alpha d$.
+\end{itemize}
+The same sequence $\{z_i\}$ with the rescaled denominators $\{\tilde{t}_i\}$ witnesses $\alpha d \in T_X(x)$.
+Since $\alpha > 0$ was arbitrary, $T_X(x)$ is closed under positive scaling: it is a cone.
+
+\begin{exercise}[\Cref{thm:kkt}]{KKT by hand}\label{ex:kkt-solve}
+	Solve $\min\{2x_1^2 + x_2^2 : x_1 + x_2 = 1,\; x_1 \geq 0,\; x_2 \geq 0\}$.
+	Identify active constraints, write KKT, and verify complementary slackness.
+\end{exercise}
+
+\solution
+\textit{Setup.}
+Rewrite the constraints in standard form:
+equality $h(x) = x_1 + x_2 - 1 = 0$;
+inequalities $g_1(x) = -x_1 \leq 0$ and $g_2(x) = -x_2 \leq 0$.
+
+\textit{KKT stationarity.}
+$\nabla f + \mu \nabla h + \lambda_1 \nabla g_1 + \lambda_2 \nabla g_2 = 0$, where
+$\nabla f = [4x_1,\, 2x_2]^T$, $\nabla h = [1,\, 1]^T$, $\nabla g_1 = [-1,\, 0]^T$, $\nabla g_2 = [0,\, -1]^T$.
+This gives the system:
+$4x_1 + \mu - \lambda_1 = 0$ and $2x_2 + \mu - \lambda_2 = 0$.
+
+\textit{Solving.}
+Guess that both bound constraints are inactive ($\lambda_1 = \lambda_2 = 0$).
+Then $\mu = -4x_1$ and $\mu = -2x_2$, so $4x_1 = 2x_2$, i.e., $x_2 = 2x_1$.
+Combined with $x_1 + x_2 = 1$: $3x_1 = 1$, giving $x_1 = 1/3$, $x_2 = 2/3$, $\mu = -4/3$.
+
+\textit{Verification.}
+Both $x_1 = 1/3 > 0$ and $x_2 = 2/3 > 0$: the bound constraints are indeed inactive, consistent with $\lambda_1 = \lambda_2 = 0$.
+Complementary slackness: $\lambda_1 \cdot g_1(x^*) = 0 \cdot (-1/3) = 0$ and $\lambda_2 \cdot g_2(x^*) = 0 \cdot (-2/3) = 0$, both satisfied.
+The problem is convex ($f$ convex, constraints affine), so KKT is sufficient for global optimality.
+Optimal value: $f(1/3, 2/3) = 2/9 + 4/9 = 2/3$.
+
+\begin{exercise}[\Cref{sec:duality}]{When strong duality fails}\label{ex:dual-counterexample}
+	For $\min\{-x^2 : 0 \leq x \leq 1\}$, compute the dual explicitly and verify the infinite duality gap.
+	Explain the failure in terms of convexity.
+\end{exercise}
+
+\solution
+\textit{Primal.}
+$f(x) = -x^2$ on $[0, 1]$.
+Since $f$ is concave, its minimum on a closed interval occurs at a vertex: $\nu(P) = \min\{f(0), f(1)\} = \min\{0, -1\} = -1$ at $x^* = 1$.
+
+\textit{Lagrangian.}
+With $g_1(x) = -x \leq 0$ and $g_2(x) = x - 1 \leq 0$:
+$L(x; \lambda_1, \lambda_2) = -x^2 - \lambda_1 x + \lambda_2(x - 1)$.
+
+\textit{Dual function.}
+$\psi(\lambda) = \inf_x L(x; \lambda)$.
+The stationary point is $\partial L / \partial x = -2x - \lambda_1 + \lambda_2 = 0$, giving $x = (\lambda_2 - \lambda_1)/2$.
+But $\partial^2 L / \partial x^2 = -2 < 0$: this stationary point is a \emph{maximum}, not a minimum.
+The Lagrangian is concave in $x$ (since $f$ is concave and the constraint terms are linear), so $\inf_x L(x; \lambda) = -\infty$ for every $\lambda \geq 0$.
+
+\textit{Duality gap.}
+$\psi(\lambda) = -\infty$ for all $\lambda \geq 0$, so $\nu(D) = \sup_{\lambda \geq 0} \psi(\lambda) = -\infty$.
+The gap is $\nu(P) - \nu(D) = -1 - (-\infty) = +\infty$.
+
+\textit{Root cause.}
+Strong duality requires the Lagrangian to have a finite minimizer in $x$.
+When $f$ is convex and the constraints are affine, $L$ is convex in $x$, guaranteeing a finite minimum.
+Here $f$ is concave, so $L$ is concave in $x$ and has no finite infimum.
+This is precisely why \Cref{thm:strong-dual-convex} requires convexity of $(P)$.
+
+\begin{exercise}[\Cref{def:farkas}, \Cref{sec:convex-sets}]{Farkas implies separation}\label{ex:farkas-separation}
+	Use Farkas' lemma to prove: if $C \subseteq \R^n$ is a closed convex set and $\bar{x} \notin C$, then $\exists\, a \in \R^n$ and $b \in \R$ such that $\inner{a, \bar{x}} > b \geq \inner{a, x}$ for all $x \in C$.
+\end{exercise}
+
+\solution
+\textit{Closest point.}
+Since $C$ is closed and convex, the projection $\hat{x} = \argmin_{x \in C} \norm{x - \bar{x}}$ exists and is unique (the squared distance is strictly convex, and closedness guarantees the infimum is attained).
+
+\textit{Separating hyperplane.}
+Set $a = \bar{x} - \hat{x}$ and $b = \inner{a, \hat{x}}$.
+
+\textit{Upper bound ($\inner{a, \bar{x}} > b$).}
+$\inner{a, \bar{x}} = \inner{\bar{x} - \hat{x}, \bar{x}} = \inner{a, \hat{x}} + \inner{a, \bar{x} - \hat{x}} = b + \norm{a}^2$.
+Since $\bar{x} \neq \hat{x}$ (because $\bar{x} \notin C$ but $\hat{x} \in C$), we have $\norm{a}^2 > 0$, so $\inner{a, \bar{x}} > b$.
+
+\textit{Lower bound ($\inner{a, x} \leq b$ for all $x \in C$).}
+Take any $x \in C$.
+The segment $\hat{x} + t(x - \hat{x}) \in C$ for $t \in [0, 1]$ (by convexity of $C$).
+The squared distance $\phi(t) = \norm{\bar{x} - \hat{x} - t(x - \hat{x})}^2$ is minimized at $t = 0$ (by definition of $\hat{x}$ as the closest point).
+The derivative at $t = 0$ must be non-negative:
+$\phi'(0) = -2\inner{\bar{x} - \hat{x},\, x - \hat{x}} \geq 0$,
+i.e., $\inner{a,\, x - \hat{x}} \leq 0$, i.e., $\inner{a, x} \leq \inner{a, \hat{x}} = b$.
+
+\textit{Connection to Farkas.}
+This is the separating hyperplane theorem: strict separation of a point from a closed convex set.
+The proof via projection is essentially a geometric version of Farkas' lemma: either a point belongs to a convex set, or it can be separated from it by a hyperplane, exactly the ``one of two alternatives'' structure that Farkas captures algebraically.

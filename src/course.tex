@@ -1,0 +1,115 @@
+% ============================================================
+% COURSE-SPECIFIC — Optimization for Data Science.
+% Loaded by the shared main.tex after housestyle + common-preamble.
+% ============================================================
+
+% --- Title-block metadata (consumed by main.tex) ---
+\newcommand{\coursetitle}{Optimization for Data Science}
+\newcommand{\coursesubtitle}{Convexity, gradient methods, duality, constrained algorithms}
+\newcommand{\courseyear}{2024/2025}
+
+% --- Extra math font ---
+\usepackage{calrsfs}
+
+% --- Paragraph heading (not defined in housestyle) ---
+\titleformat{\paragraph}[block]%
+  {\normalfont\normalsize\bfseries}{\theparagraph}{1em}{}
+\titlespacing*{\paragraph}{0pt}{2.5ex plus 0.8ex minus 0.2ex}{0.8em}
+
+% --- Course math macros ---
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\C}{\mathbb{C}}
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Q}{\mathbb{Q}}
+\newcommand{\Rbar}{\overline{\mathbb{R}}}
+
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator{\dom}{dom}
+\DeclareMathOperator{\epi}{epi}
+\DeclareMathOperator{\conv}{conv}
+\DeclareMathOperator{\Cone}{Cone}
+\DeclareMathOperator{\rank}{rank}
+\DeclareMathOperator{\diag}{diag}
+\DeclareMathOperator{\tr}{tr}
+\DeclareMathOperator{\im}{im}
+\DeclareMathOperator{\Gr}{Gr}
+\DeclareMathOperator{\sign}{sign}
+
+\DeclarePairedDelimiter{\norm}{\lVert}{\rVert}
+\DeclarePairedDelimiter{\abs}{\lvert}{\rvert}
+\DeclarePairedDelimiter{\inner}{\langle}{\rangle}
+
+\newcommand{\Cdot}{\boldsymbol{\cdot}}
+
+% --- House callouts: box-free run-in (unnumbered) ---
+\makeatletter
+\newcommand{\callout@head}[1]{%
+  \@ifnextchar\bgroup{\callout@headtitled{#1}}
+    {{\bfseries\color{accent}#1.}\hspace{0.4em}\ignorespaces}}
+\newcommand{\callout@headtitled}[2]{%
+  {\bfseries\color{accent}#1\if\relax\detokenize{#2}\relax\else\ (#2)\fi.}%
+  \hspace{0.4em}\ignorespaces}
+\newenvironment{definitionbox}{\par\addvspace{9pt}\small\noindent\callout@head{Definition}}{\par\addvspace{9pt}}
+\newenvironment{notebox}{\par\addvspace{9pt}\small\noindent\callout@head{Note}}{\par\addvspace{9pt}}
+\newenvironment{examplebox}{\par\addvspace{9pt}\small\noindent\callout@head{Example}}{\par\addvspace{9pt}}
+\makeatother
+
+% Exercise environment — a hairline-ruled box holding the STATEMENT only.
+% The solution follows below the box as running text, opened by \solution.
+% (tcolorbox comes from common-preamble)
+\newtcolorbox{exercise}[2][]{%
+  enhanced,
+  breakable,
+  frame hidden,
+  colback       = white,
+  borderline west = {1.5pt}{0pt}{black!25},
+  left          = 8pt,
+  right         = 8pt,
+  top           = 6pt,
+  bottom        = 6pt,
+  before skip   = 14pt plus 3pt,
+  after skip    = 6pt plus 2pt,
+  parbox        = false,
+  before upper  = {\textbf{#2}\ifstrempty{#1}{}{\hfill \textnormal{\small\color{black!60} [#1]}}\par\smallskip},
+}
+% Run-in "Solution." label for the prose that follows an exercise box.
+\newcommand{\solution}{\par\addvspace{2pt}\noindent\textsc{Solution.}\enspace\ignorespaces}
+
+% Course-specific: algorithmicx layer (algorithm/algpseudocode in common-preamble)
+\usepackage{algorithmicx}
+
+% Bibliography resource (biblatex backend loaded in common-preamble)
+\addbibresource{references.bib}
+
+% --- Links (hyperref + cleveref last, before \begin{document}) ---
+\usepackage{hyperref}
+\hypersetup{
+  colorlinks  = true,
+  linkcolor   = accent,
+  citecolor   = accent,
+  urlcolor    = accent,
+  pdfauthor   = {Francesco Secoli},
+  pdftitle    = {Optimization for Data Science},
+}
+\usepackage[capitalise, noabbrev]{cleveref}
+\crefname{housethm}{Result}{Results}
+\Crefname{housethm}{Result}{Results}
+
+% --- Document body: the section list (expanded by main.tex) ---
+\newcommand{\coursebody}{%
+  \input{sec/_01_foundations}%
+  \input{sec/_02_spectral}%
+  \input{sec/_03_univariate}%
+  \input{sec/_04_optimality}%
+  \input{sec/_05_quadratic_methods}%
+  \input{sec/_06_smooth_methods}%
+  \input{sec/_07_nonsmooth}%
+  \input{sec/_08_constrained_theory}%
+  \input{sec/_09_constrained_algorithms}%
+  \newpage
+  \input{sec/_10_appendix_exercises}%
+  \newpage
+  \printbibliography
+}
